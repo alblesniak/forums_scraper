@@ -1,0 +1,19 @@
+# Zależności dla modułu analizy tokenów
+# Główne zależności
+
+# Obsługa daemon (opcjonalna)
+python-daemon>=2.3.0
+lockfile>=0.12.2
+
+# Multiprocessing i postęp
+tqdm>=4.65.0
+
+# Rozszerzone zależności
+spacy>=3.5.0  # Dla zaawansowanej tokenizacji
+# nltk>=3.8.1   # Dla alternatywnej tokenizacji
+# textstat>=0.7.3  # Dla dodatkowych metryk tekstu
+
+# Zależności deweloperskie (opcjonalne)
+# pytest>=7.0.0  # Dla testów jednostkowych
+# black>=22.0.0   # Dla formatowania kodu
+# flake8>=5.0.0   # Dla sprawdzania stylu

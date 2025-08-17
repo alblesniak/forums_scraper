@@ -1,0 +1,17 @@
+[project]
+name = "forums-scraper"
+version = "0.1.0"
+description = "Aplikacja do scrapowania forów religijnych zbudowana w Scrapy"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "psutil>=7.0.0",
+    "scrapy>=2.13.3",
+    "top2vec>=1.0.0",
+    "tqdm>=4.67.1",
+]
+
+[project.scripts]
+run-scrapers = "scripts.run_all_scrapers_final:main"
+test-scraper = "scripts.test_single_scraper:main"
+merge-databases = "scripts.merge_all_databases:main"
