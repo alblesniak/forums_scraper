@@ -3,9 +3,9 @@ from urllib.parse import urljoin, urlparse, parse_qs
 import re
 from ..items import ForumItem, ForumSectionItem, ForumThreadItem, ForumUserItem, ForumPostItem
 try:
-    from ..utils import clean_post_content, clean_dolina_modlitwy_post_content, normalize_gender, parse_polish_date
+    from ..utils import clean_post_content, clean_dolina_modlitwy_post_content, normalize_gender, parse_polish_date, extract_urls_from_html, strip_quotes_from_html
 except ImportError:
-    from utils import clean_post_content, clean_dolina_modlitwy_post_content, normalize_gender, parse_polish_date
+    from utils import clean_post_content, clean_dolina_modlitwy_post_content, normalize_gender, parse_polish_date, extract_urls_from_html, strip_quotes_from_html
 
 
 class DolinaModlitwySpider(scrapy.Spider):
@@ -32,15 +32,17 @@ class DolinaModlitwySpider(scrapy.Spider):
         """Tryb szybkiego testu: pobierz jedną stronę konkretnego wątku."""
         if getattr(self, 'only_thread_url', None):
             thread_url = self.only_thread_url
-            # URL sekcji z parametru f
+            # URL sekcji z parametru f oraz identyfikator wątku t (jeśli obecne)
             try:
                 from urllib.parse import urlparse, parse_qs, urljoin
                 parsed = urlparse(thread_url)
                 params = parse_qs(parsed.query)
                 f_param = params.get('f', [None])[0]
+                t_param = params.get('t', [None])[0]
                 section_url = urljoin(f"{parsed.scheme}://{parsed.netloc}/", f"viewforum.php?f={f_param}") if f_param else None
             except Exception:
                 section_url = None
+                t_param = None
 
             # Forum
             forum_item = ForumItem()
@@ -55,13 +57,14 @@ class DolinaModlitwySpider(scrapy.Spider):
                 section_item['url'] = section_url
                 yield section_item
 
-            # Wątek
-            thread_item = ForumThreadItem()
-            thread_item['title'] = 'manual'
-            thread_item['url'] = thread_url
-            if section_url:
-                thread_item['section_url'] = section_url
-            yield thread_item
+            # Wątek minimalny, jeśli mamy t=
+            if t_param:
+                thread_item = ForumThreadItem()
+                thread_item['title'] = 'manual'
+                thread_item['url'] = thread_url
+                if section_url:
+                    thread_item['section_url'] = section_url
+                yield thread_item
 
             # Parsuj posty
             thread_id = self._get_thread_id_from_url(thread_url)
@@ -367,8 +370,34 @@ class DolinaModlitwySpider(scrapy.Spider):
         # Znajdź thread_id na podstawie URL
         thread_id = self._get_thread_id_from_url(thread_url)
         if not thread_id:
-            self.logger.warning(f"Nie znaleziono thread_id dla URL: {thread_url}")
-            return None
+            # Fallback: jeśli weszliśmy przez p=, znajdź link do wątku z t=
+            candidate = response.css('a[href*="viewtopic.php?t="]::attr(href)').get()
+            if candidate:
+                abs_thread_url = urljoin(response.url, candidate)
+                # Wyemituj minimalny wątek
+                thread_item = ForumThreadItem()
+                thread_item['title'] = thread_title or 'manual'
+                thread_item['url'] = abs_thread_url
+                # Spróbuj zarejestrować sekcję, jeśli widoczna
+                section_href = response.css('a[href*="viewforum.php?f="]::attr(href)').get()
+                if section_href:
+                    section_abs = urljoin(response.url, section_href)
+                    section_item = ForumSectionItem()
+                    section_item['title'] = response.meta.get('section_title') or 'manual'
+                    section_item['url'] = section_abs
+                    yield section_item
+                    thread_item['section_url'] = section_abs
+                yield thread_item
+                # Ponów żądanie z poprawnym thread_url/meta
+                yield scrapy.Request(
+                    url=response.url,
+                    callback=self.parse_thread_posts,
+                    meta={'thread_url': abs_thread_url, 'thread_title': thread_title, 'thread_id': self._get_thread_id_from_url(abs_thread_url)}
+                )
+                return None
+            else:
+                self.logger.warning(f"Nie znaleziono thread_id ani linku t= dla URL: {thread_url}")
+                return None
         
         # Wyciągnij wszystkie posty z aktualnej strony - poprawiona struktura HTML
         # Posty znajdują się w elementach div z klasą "post"
@@ -457,8 +486,21 @@ class DolinaModlitwySpider(scrapy.Spider):
             if content_element:
                 # Wyciągnij HTML zawartości
                 content_html = content_element.get()
-                # Wyczyść zawartość używając specjalnej funkcji dla dolina_modlitwy
-                content = clean_dolina_modlitwy_post_content(content_html)
+                # 1) Tekst bez cytatów przy użyciu XPath (pomija węzły będące w ancestor::blockquote lub ancestor::div[contains(@class,'quote')])
+                text_nodes = post.xpath('.//div[contains(@class,"postbody")]//div[contains(@class,"content")]//text()[not(ancestor::blockquote) and not(ancestor::div[contains(@class,"quote")])]')
+                text_joined = ' '.join([t.get().strip() for t in text_nodes if t.get().strip()])
+                # 2) Jeśli XPath nic nie zwrócił, wróć do HTML-owego czyszczenia
+                if text_joined:
+                    content = text_joined
+                    content_urls = extract_urls_from_html(content_html, base_url=response.url)
+                else:
+                    from re import IGNORECASE, DOTALL, sub
+                    # Odetnij wiodące cytaty na początku treści (ostrożnie)
+                    leading_quotes_pattern = r'(?is)^(?:\s*(?:<blockquote[^>]*>.*?</blockquote>|<div[^>]+class=\"[^\"]*quote[^\"]*\"[^>]*>.*?</div>))+' 
+                    content_html_after_lead = sub(leading_quotes_pattern, '', content_html)
+                    # Wyczyść i wyciągnij linki
+                    content = clean_dolina_modlitwy_post_content(content_html_after_lead)
+                    content_urls = extract_urls_from_html(content_html_after_lead, base_url=response.url)
             
             # Data postu - poprawiona struktura HTML
             post_date = None
@@ -481,6 +523,7 @@ class DolinaModlitwySpider(scrapy.Spider):
             post_item['username'] = author  # Dodaj username dla pipeline
             post_item['post_number'] = post_number
             post_item['content'] = content
+            post_item['content_urls'] = content_urls if 'content_urls' in locals() else []
             post_item['post_date'] = post_date
             post_item['url'] = post_url
             

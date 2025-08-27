@@ -1,5 +1,5 @@
 import scrapy
-from urllib.parse import urljoin, urlparse, parse_qs
+from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
 import re
 try:
     from ..items import ForumItem, ForumSectionItem, ForumThreadItem, ForumUserItem, ForumPostItem
@@ -7,15 +7,30 @@ except ImportError:
     from items import ForumItem, ForumSectionItem, ForumThreadItem, ForumUserItem, ForumPostItem
 
 try:
-    from ..utils import clean_post_content, normalize_gender, parse_polish_date
+    from ..utils import clean_post_content, normalize_gender, parse_polish_date, extract_urls_from_html, strip_quotes_from_html
 except ImportError:
-    from utils import clean_post_content, normalize_gender, parse_polish_date
+    from utils import clean_post_content, normalize_gender, parse_polish_date, extract_urls_from_html, strip_quotes_from_html
 
 
 class RadioKatolikSpider(scrapy.Spider):
     name = "radio_katolik"
     allowed_domains = ["dyskusje.radiokatolik.pl"]
     start_urls = ["https://dyskusje.radiokatolik.pl"]
+    custom_settings = {
+        'CONCURRENT_REQUESTS': 8,
+        'CONCURRENT_REQUESTS_PER_DOMAIN': 4,
+        'CONCURRENT_REQUESTS_PER_IP': 4,
+        'DOWNLOAD_DELAY': 1.0,
+        'RANDOMIZE_DOWNLOAD_DELAY': True,
+        'AUTOTHROTTLE_ENABLED': True,
+        'AUTOTHROTTLE_START_DELAY': 0.5,
+        'AUTOTHROTTLE_MAX_DELAY': 10.0,
+        'AUTOTHROTTLE_TARGET_CONCURRENCY': 2.0,
+        'DOWNLOAD_TIMEOUT': 45,
+        'DNS_TIMEOUT': 20,
+        'RETRY_TIMES': 5,
+        'RETRY_PRIORITY_ADJUST': -1,
+    }
 
     def __init__(self, only_thread_url=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -24,7 +39,7 @@ class RadioKatolikSpider(scrapy.Spider):
     def start_requests(self):
         """Tryb szybkiego testu: pobierz jedną stronę konkretnego wątku."""
         if getattr(self, 'only_thread_url', None):
-            thread_url = self.only_thread_url
+            thread_url = self._strip_sid(self.only_thread_url)
             # Wyznacz URL sekcji z parametru f
             try:
                 from urllib.parse import urlparse, parse_qs, urljoin
@@ -32,6 +47,8 @@ class RadioKatolikSpider(scrapy.Spider):
                 params = parse_qs(parsed.query)
                 f_param = params.get('f', [None])[0]
                 section_url = urljoin(f"{parsed.scheme}://{parsed.netloc}/", f"viewforum.php?f={f_param}") if f_param else None
+                if section_url:
+                    section_url = self._strip_sid(section_url)
             except Exception:
                 section_url = None
 
@@ -65,7 +82,7 @@ class RadioKatolikSpider(scrapy.Spider):
             )
             return
         for url in self.start_urls:
-            yield scrapy.Request(url=url, callback=self.parse)
+            yield scrapy.Request(url=self._strip_sid(url), callback=self.parse)
 
     def parse(self, response):
         """
@@ -91,7 +108,7 @@ class RadioKatolikSpider(scrapy.Spider):
             
             # Wyciągnij względny URL i przekształć na pełny URL
             relative_url = link.css('::attr(href)').get()
-            full_url = urljoin(response.url, relative_url)
+            full_url = self._strip_sid(urljoin(response.url, relative_url))
             
             # Utwórz item dla sekcji forum
             section_item = ForumSectionItem()
@@ -131,7 +148,7 @@ class RadioKatolikSpider(scrapy.Spider):
                 
                 # Wyślij request do scrapowania postów w wątku
                 yield scrapy.Request(
-                    url=thread_data['url'],
+                    url=self._strip_sid(thread_data['url']),
                     callback=self.parse_thread_posts,
                     meta={'thread_url': thread_data['url'], 'thread_title': thread_data['title'], 'thread_id': None}
                 )
@@ -168,7 +185,7 @@ class RadioKatolikSpider(scrapy.Spider):
             if not relative_url:
                 self.logger.debug("Nie znaleziono URL wątku")
                 return None
-            full_url = urljoin(response.url, relative_url)
+            full_url = self._strip_sid(urljoin(response.url, relative_url))
             
             # Autor wątku - w tej strukturze HTML autor jest w elemencie z klasą topicauthor
             author_element = thread.css('.topicauthor a')
@@ -249,7 +266,7 @@ class RadioKatolikSpider(scrapy.Spider):
         all_links = response.css('a[href*="start="]::attr(href)').getall()
         
         for link in all_links:
-            full_url = urljoin(response.url, link)
+            full_url = self._strip_sid(urljoin(response.url, link))
             
             # Sprawdź czy to link do następnej strony (nie do konkretnego postu)
             if 'viewforum.php' in full_url and 'start=' in full_url:
@@ -284,8 +301,25 @@ class RadioKatolikSpider(scrapy.Spider):
         # Znajdź thread_id na podstawie URL
         thread_id = self._get_thread_id_from_url(thread_url)
         if not thread_id:
-            self.logger.warning(f"Nie znaleziono thread_id dla URL: {thread_url}")
-            return
+            # Fallback: jeśli URL zawiera tylko p=, wydobądź link do wątku z t=
+            candidate = response.css('a[href*="viewtopic.php?t="]::attr(href)').get()
+            if candidate:
+                abs_thread_url = self._strip_sid(urljoin(response.url, candidate))
+                # Wyemituj minimalny wątek (aby pipeline miał rekord)
+                thread_item = ForumThreadItem()
+                thread_item['title'] = thread_title or 'manual'
+                thread_item['url'] = abs_thread_url
+                yield thread_item
+                # Powtórz żądanie do tej samej strony z poprawnym thread_url/meta
+                yield scrapy.Request(
+                    url=response.url,
+                    callback=self.parse_thread_posts,
+                    meta={'thread_url': abs_thread_url, 'thread_title': thread_title, 'thread_id': self._get_thread_id_from_url(abs_thread_url)}
+                )
+                return
+            else:
+                self.logger.warning(f"Nie znaleziono thread_id ani linku t= na stronie: {response.url}")
+                return
         
         # Wyciągnij wszystkie posty z aktualnej strony
         # W tej strukturze HTML posty są w wierszach z klasą row1 lub row2
@@ -317,7 +351,7 @@ class RadioKatolikSpider(scrapy.Spider):
         next_page_links = self._extract_thread_pagination_links(response)
         for next_page_url in next_page_links:
             yield scrapy.Request(
-                url=next_page_url,
+                url=self._strip_sid(next_page_url),
                 callback=self.parse_thread_posts,
                 meta={'thread_url': thread_url, 'thread_title': thread_title, 'thread_id': thread_id}
             )
@@ -345,7 +379,7 @@ class RadioKatolikSpider(scrapy.Spider):
             post_url = None
             if post_link:
                 # Konwertuj względny URL na pełny URL
-                post_url = urljoin(response.url, post_link)
+                post_url = self._strip_sid(urljoin(response.url, post_link))
                 # Wyciągnij numer postu z URL np. viewtopic.php?p=1087395
                 match = re.search(r'p=(\d+)', post_link)
                 if match:
@@ -357,8 +391,11 @@ class RadioKatolikSpider(scrapy.Spider):
             if content_element:
                 # Wyciągnij HTML zawartości
                 content_html = content_element.get()
-                # Wyczyść zawartość
-                content = clean_post_content(content_html)
+                # Usuń cytaty i ekstrahuj URL-e tylko z oryginalnej treści
+                content_html_no_quotes = strip_quotes_from_html(content_html)
+                content_urls = extract_urls_from_html(content_html_no_quotes, base_url=response.url)
+                # Wyczyść zawartość NA BAZIE HTML BEZ CYTATÓW
+                content = clean_post_content(content_html_no_quotes)
             
             # Data postu (znajduje się w następnym wierszu)
             post_date = None
@@ -384,6 +421,7 @@ class RadioKatolikSpider(scrapy.Spider):
             post_item['username'] = author  # Dodaj username dla pipeline
             post_item['post_number'] = post_number
             post_item['content'] = content
+            post_item['content_urls'] = content_urls if 'content_urls' in locals() else []
             post_item['post_date'] = post_date
             post_item['url'] = post_url
             
@@ -501,7 +539,7 @@ class RadioKatolikSpider(scrapy.Spider):
         for element in pagination_elements:
             href = element.css('::attr(href)').get()
             if href:
-                full_url = urljoin(response.url, href)
+                full_url = self._strip_sid(urljoin(response.url, href))
                 pagination_links.append(full_url)
         
         return pagination_links
@@ -527,3 +565,16 @@ class RadioKatolikSpider(scrapy.Spider):
         except Exception as e:
             self.logger.error(f"Błąd podczas znajdowania thread_id: {e}")
             return None
+
+    def _strip_sid(self, url: str) -> str:
+        """Usuwa parametr 'sid' z URL, aby uniknąć problemów sesyjnych i duplikatów."""
+        try:
+            parsed = urlparse(url)
+            query = parse_qs(parsed.query)
+            if 'sid' in query:
+                query.pop('sid', None)
+                new_query = urlencode(query, doseq=True)
+                return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+            return url
+        except Exception:
+            return url

@@ -78,6 +78,104 @@ python scripts/pipeline.py clean    # czyści pośrednie bazy wg configu
 python scripts/pipeline.py all --config scripts/pipeline.config.json
 ```
 
+### Generator taksonomii i promptu (Excel + LLM)
+
+Moduł generuje 3‑poziomową taksonomię i finalny prompt systemowy wyłącznie na podstawie pliku Excel z postami. Pipeline działa wieloetapowo: streszczenia + cytat, propozycje głównych kategorii, konsolidacja, indukcja poziomów 2/3, numeracja, przypisania postów, eksport artefaktów, wygenerowanie docelowego `system_message` (PL).
+
+#### Wymagania (OpenRouter + DeepSeek R1 0528)
+
+- Zależność: `openai` (używamy klienta z `base_url`)
+- Konfiguracja LLM w `analysis/config.py` (`LLM_CONFIG`) jest domyślnie ustawiona na OpenRouter i model `deepseek/deepseek-r1-0528:free`.
+- Ustaw klucz środowiskowy:
+
+```bash
+export OPENROUTER_API_KEY="sk-or-..."
+# opcjonalnie (dla statystyk w OpenRouter):
+export OPENROUTER_HTTP_REFERER="https://twoja-aplikacja.example"
+export OPENROUTER_APP_TITLE="Forums Scraper"
+```
+
+Możesz nadpisać endpoint/model przez zmienne:
+
+```bash
+export OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
+export LLM_MODEL="deepseek/deepseek-r1-0528:free"
+export LLM_TEMPERATURE=0.7
+export LLM_MAX_TOKENS=1000
+```
+
+Źródło modelu i przykłady użycia w API: [DeepSeek: R1 0528 (free) — OpenRouter](https://openrouter.ai/deepseek/deepseek-r1-0528:free)
+
+#### Dane wejściowe (Excel)
+
+Minimalne kolumny:
+
+- `post_id` (jeśli brak, zostanie nadany sekwencyjnie)
+- `content` (treść posta)
+
+Domyślnie wykorzystujemy przykład:
+
+```
+data/topics/results/20250821/M/ALL/185832/examples/topic_2_pi_pis_sld.xlsx
+```
+
+#### Uruchomienie
+
+```bash
+# Domyślne ścieżki i temat: polityka
+python scripts/pipeline.py taxonomy --taxonomy-theme polityka
+
+# Parametry opcjonalne
+python scripts/pipeline.py taxonomy \
+  --taxonomy-excel /pełna/ścieżka.xlsx \
+  --taxonomy-output /Users/alb/repos/forums_scraper/data/topics \
+  --taxonomy-theme polityka \
+  --taxonomy-batch 50 \
+  --taxonomy-max-posts 500
+```
+
+#### Co powstaje (artefakty)
+
+Artefakty zapisują się do katalogu:
+
+```
+data/topics/taxonomies/<YYYYMMDD>/<theme_slug>_<HHMMSS>/
+```
+
+Wewnątrz znajdziesz:
+
+- `taxonomy.json` – znumerowana taksonomia 3‑poziomowa (`1`, `1.1`, `1.1.1`)
+- `prompt_system_message.md` – gotowy system_message (PL) z Twoimi zasadami i pełną listą kategorii
+- `assignments.jsonl` – przypisania postów: `post_id`, `path` (np. `3.2.5`), `confidence`
+- `labeled_<oryginalny_plik>.xlsx` – Excel z dodatkowymi kolumnami: `summary`, `quote`, `path`, `confidence`
+
+#### Jak to działa (skrót procesu)
+
+1. Streszczenia: dla każdego posta powstaje krótkie podsumowanie (1–2 zdania) i 1 cytat
+2. Propozycje głównych kategorii per post (1–3 kandydatury)
+3. Konsolidacja kategorii głównych (8–15 spójnych nazw + krótkie opisy)
+4. Indukcja podkategorii (poziom 2) i pod‑podkategorii (poziom 3)
+5. Numeracja hierarchii (1, 1.1, 1.1.1)
+6. Przypisania postów do pełnych ścieżek (`X.Y.Z`) z `confidence`
+7. Eksport artefaktów i wygenerowanie `system_message`
+
+#### Dobre praktyki
+
+- Zadbaj o sensowny dobór tematu (`--taxonomy-theme`) – wpływa na jakość nazw
+- Batch (`--taxonomy-batch`) dostosuj do limitów tokenów – zwykle 50–100 działa dobrze
+- Jeżeli `confidence` często < 0.6 lub dużo „Inne”, uruchom proces na większym zbiorze lub zawęź temat
+
+#### Rozwiązywanie problemów
+
+- Błąd klucza: sprawdź `LLM_CONFIG['api_key']` w `analysis/config.py`
+- Brak kolumny `content`: dostosuj nagłówki w Excelu (możesz użyć `text`, `post`, `message`, `body` – zostaną zmapowane)
+- Brak `openai`: zainstaluj zależność (`uv sync` lub `pip install -r requirements.txt`)
+
+#### Automatyczny slug tematu
+
+- Jeśli podasz `--taxonomy-theme`, zostanie on zsanityzowany do slug'a (małe litery, myślniki).
+- Jeśli nie podasz, slug zostanie automatycznie wyciągnięty z nazwy pliku Excela (zsanityzowany).
+
 Konfiguracja domyślna jest wbudowana w `scripts/pipeline.py`. Możesz ją nadpisać przez `scripts/pipeline.config.json` lub zmienne środowiskowe dla modelowania tematycznego. Artefakty trzymamy w `data/`:
 
 ```bash
@@ -195,6 +293,60 @@ Moduł analizy tworzy kopię bazy danych (`analysis_forums.db`) w `data/database
 
 - `token_analysis` - wyniki analizy tokenów dla każdego posta
 - `analysis_stats` - statystyki dzienne analizy
+
+## Tokenizacja spaCy (uv + CLI)
+
+Poniższe komendy uruchomisz z katalogu głównego. Wykorzystują CLI `token-analysis` dodane w `pyproject.toml` i działają w środowisku `uv`.
+
+### 1) Połącz bazy poszczególnych forów do jednej
+
+```bash
+uv run merge-databases --target data/databases/merged_forums.db
+```
+
+### 2) Utwórz bazę do analizy (kopię źródłowej bazy)
+
+```bash
+uv run --with spacy --with pl-core-news-sm \
+  token-analysis \
+  --source-db data/databases/merged_forums.db \
+  --analysis-db data/databases/analysis_forums.db \
+  --forums radio_katolik,dolina_modlitwy \
+  --create-db
+```
+
+### 3) Uruchom analizę tokenów (spaCy)
+
+```bash
+uv run --with spacy --with pl-core-news-sm \
+  token-analysis \
+  --source-db data/databases/merged_forums.db \
+  --analysis-db data/databases/analysis_forums.db \
+  --forums radio_katolik,dolina_modlitwy \
+  --all
+```
+
+### 4) Podsumowanie wyników
+
+```bash
+uv run --with spacy --with pl-core-news-sm \
+  token-analysis \
+  --source-db data/databases/merged_forums.db \
+  --analysis-db data/databases/analysis_forums.db \
+  --forums radio_katolik,dolina_modlitwy \
+  --summary
+```
+
+### Opcja: instalacja spaCy i modelu na stałe
+
+Zamiast `--with ...` możesz dodać zależności trwale i pobrać model:
+
+```bash
+uv add spacy
+uv run python -m spacy download pl_core_news_sm
+```
+
+Po tej instalacji `--with spacy --with pl-core-news-sm` nie jest już potrzebne.
 
 ## Logi
 

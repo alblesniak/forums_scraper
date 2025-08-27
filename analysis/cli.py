@@ -15,7 +15,9 @@ from typing import List, Optional
 sys.path.append(str(Path(__file__).parent))
 
 from tokenization import TokenAnalyzer
+from gender_prediction import run_gender_rules, run_gender_rules_into_analysis
 from config import get_config
+from topic_modeling.batch_classifier import run_batch_classification
 
 class AnalysisCLI:
     """Interfejs wiersza poleceń dla analizy"""
@@ -27,8 +29,9 @@ class AnalysisCLI:
     def setup_analyzer(self, source_db: str, analysis_db: str, forums: List[str] = None):
         """Konfiguruje analizator"""
         try:
-            if forums is None:
-                forums = self.config['forums_to_analyze']
+            # Jeżeli fora nie zostały podane, pozwól analizatorowi wykryć je z bazy
+            if forums is None or (isinstance(forums, list) and len(forums) == 0) or forums == ['auto']:
+                forums = None
             
             self.analyzer = TokenAnalyzer(
                 source_db=source_db,
@@ -39,7 +42,10 @@ class AnalysisCLI:
             print(f"✅ Analizator skonfigurowany")
             print(f"   📍 Baza źródłowa: {source_db}")
             print(f"   📍 Baza analizy: {analysis_db}")
-            print(f"   🎯 Fora do analizy: {', '.join(forums)}")
+            if forums is None:
+                print(f"   🎯 Fora do analizy: (auto) zostaną wykryte z bazy")
+            else:
+                print(f"   🎯 Fora do analizy: {', '.join(forums)}")
             print(f"   ⚡ Multiprocessing: {'Włączone' if self.config['multiprocessing']['use_multiprocessing'] else 'Wyłączone'}")
             print(f"   🔧 Liczba procesów: {self.config['multiprocessing']['max_workers']}")
             
@@ -250,10 +256,24 @@ Przykłady użycia:
                        help="Analizuj partię postów o określonym rozmiarze")
     parser.add_argument("--all", action="store_true",
                        help="Analizuj wszystkie posty z określonych forów")
+    # Nowy etap: predykcja płci
+    parser.add_argument("--gender-rules", action="store_true",
+                       help="Uruchom predykcję płci na podstawie reguł językowych (rules_v1)")
+    parser.add_argument("--gender-rules-crossdb", action="store_true",
+                       help="Predykcja płci: czytaj z --source-db (forum_*.db), zapisz do --analysis-db (gender_predictions)")
     parser.add_argument("--continuous", action="store_true",
                        help="Uruchom ciągłą analizę")
     parser.add_argument("--summary", action="store_true",
                        help="Pokaż podsumowanie analizy")
+    # Klasyfikacja LLM ws. taksonomii
+    parser.add_argument("--llm-classify", action="store_true",
+                       help="Uruchom klasyfikację postów z Excela przez OpenAI Batch API")
+    parser.add_argument("--llm-input", type=str, default="data/topics/results/20250821/M/ALL/185832/examples/topic_2_pi_pis_sld.xlsx",
+                       help="Ścieżka do wejściowego pliku Excel z kolumną 'content' (i opcjonalnie 'post_id')")
+    parser.add_argument("--llm-batch-size", type=int, default=10,
+                       help="Rozmiar batcha (liczba postów na job Batch API)")
+    parser.add_argument("--llm-interval", type=int, default=10,
+                       help="Interwał pollingu statusu batcha (sekundy)")
     
     # Opcje ciągłej analizy
     parser.add_argument("--interval", type=int, default=300,
@@ -268,7 +288,7 @@ Przykłady użycia:
     args = parser.parse_args()
     
     # Sprawdź czy podano akcję
-    if not any([args.create_db, args.info, args.batch, args.all, args.continuous, args.summary]):
+    if not any([args.create_db, args.info, args.batch, args.all, args.continuous, args.summary, args.gender_rules, args.gender_rules_crossdb, args.llm_classify]):
         parser.print_help()
         return False
     
@@ -311,6 +331,68 @@ Przykłady użycia:
     
     if args.summary:
         success &= cli.show_summary()
+
+    if args.gender_rules:
+        # Uruchom prosty predyktor płci dla wybranych forów (lub wszystkich wykrytych)
+        forums_list = forums
+        if forums_list is None:
+            # Wykryj fora z bazy analizy (tak jak w TokenAnalyzer)
+            try:
+                import sqlite3
+                conn = sqlite3.connect(args.analysis_db)
+                cur = conn.cursor()
+                cur.execute("SELECT spider_name FROM forums")
+                forums_list = [row[0] for row in cur.fetchall()]
+                conn.close()
+            except Exception:
+                forums_list = None
+        print("\n=== Predykcja płci (rules_v1) ===")
+        res = run_gender_rules(args.analysis_db, forums=forums_list)
+        print(f"Użytkownicy przetworzeni: {res.get('processed_users', 0)}")
+        print(f"Zapisane predykcje: {res.get('saved_predictions', 0)}")
+
+    if args.gender_rules_crossdb:
+        # Cross-DB: czytamy ze źródła (forum_*.db), zapisujemy do bazy analizy
+        forums_list = forums
+        if forums_list is None:
+            # Wykryj fora ze źródła
+            try:
+                import sqlite3
+                conn = sqlite3.connect(args.source_db)
+                cur = conn.cursor()
+                cur.execute("SELECT spider_name FROM forums")
+                forums_list = [row[0] for row in cur.fetchall()]
+                conn.close()
+            except Exception:
+                forums_list = None
+
+        print("\n=== Predykcja płci (rules_v1, cross-DB) ===")
+        try:
+            res = run_gender_rules_into_analysis(
+                analysis_db=args.analysis_db,
+                source_db=args.source_db,
+                forums=forums_list,
+            )
+            print(f"Użytkownicy przetworzeni: {res.get('processed_users', 0)}")
+            print(f"Zapisane predykcje: {res.get('saved_predictions', 0)}")
+        except Exception as e:
+            print(f"❌ Błąd predykcji (cross-DB): {e}")
+    
+    if args.llm_classify:
+        print("\n=== Klasyfikacja LLM (Batch API) ===")
+        try:
+            res = run_batch_classification(
+                excel_path=args.llm_input,
+                batch_size=args.llm_batch_size,
+                poll_interval_s=args.llm_interval,
+            )
+            print("Wyniki zapisane w:")
+            print(f"  run_dir: {res.get('run_dir')}")
+            print(f"  taxonomy: {res.get('taxonomy_path')}")
+            print(f"  combined: {res.get('combined_path')}")
+            print(f"  excel: {res.get('excel_out_path')}")
+        except Exception as e:
+            print(f"❌ Błąd klasyfikacji LLM: {e}")
     
     if args.continuous:
         cli.run_continuous_analysis(args.interval, args.batch_size)

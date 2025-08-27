@@ -78,9 +78,8 @@ class FinalScraperManager:
         signal.signal(signal.SIGINT, self.signal_handler)
         signal.signal(signal.SIGTERM, self.signal_handler)
         
-        # Katalogi logów
+        # Ścieżka do katalogu logów (tworzymy dopiero przy zapisie)
         self.log_dir = Path('data/logs')
-        self.log_dir.mkdir(exist_ok=True)
     
     def signal_handler(self, signum, frame):
         """Obsługa sygnałów do bezpiecznego zamykania"""
@@ -350,6 +349,8 @@ class FinalScraperManager:
     def save_final_stats(self):
         """Zapisuje końcowe statystyki do pliku JSON"""
         try:
+            # Upewnij się, że katalog istnieje dopiero przy zapisie
+            self.log_dir.mkdir(parents=True, exist_ok=True)
             stats_file = self.log_dir / 'final_stats.json'
             
             # Przygotuj dane do zapisu

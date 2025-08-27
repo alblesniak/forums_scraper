@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from urllib.parse import urljoin, urlparse
 
 
 def clean_post_content(content):
@@ -15,17 +16,25 @@ def clean_post_content(content):
     if not content:
         return ""
     
-    # Usuń cytaty (div class="quotewrapper")
+    # Usuń cytaty (div class="quotewrapper") i inne możliwe kontenery cytatów
     content = re.sub(r'<div class="quotewrapper">.*?</div>', '', content, flags=re.DOTALL)
+    content = re.sub(r'<blockquote[^>]*>.*?</blockquote>', '', content, flags=re.IGNORECASE | re.DOTALL)
+    content = re.sub(r"<div[^>]+class=\"[^\"]*quote[^\"]*\"[^>]*>.*?</div>", '', content, flags=re.IGNORECASE | re.DOTALL)
     
     # Usuń podpisy (span class="postbody signature")
     content = re.sub(r'<span class="postbody signature">.*?</span>', '', content, flags=re.DOTALL)
+
+    # Usuń sekcję notice (np. "Ostatnio zmieniony ...")
+    content = re.sub(r'<div class="notice">.*?</div>', '', content, flags=re.IGNORECASE | re.DOTALL)
+
+    # Usuń informator "Dodano po ..." (często w zagnieżdżonych spanach)
+    content = re.sub(r'<span[^>]*>\s*<span[^>]*>\s*Dodano po[\s\S]*?</span>\s*</span>', '', content, flags=re.IGNORECASE)
     
     # Usuń obrazy
     content = re.sub(r'<img[^>]*>', '', content)
     
-    # Usuń linki (zachowaj tekst)
-    content = re.sub(r'<a[^>]*>(.*?)</a>', r'\1', content)
+    # Usuń linki wraz z ich tekstem (link tekst nie jest zachowywany)
+    content = re.sub(r'<a[^>]*>.*?</a>', '', content, flags=re.IGNORECASE | re.DOTALL)
     
     # Usuń adresy URL w tekście (http/https/www)
     content = re.sub(r'https?://[^\s<>"]+', '', content)
@@ -65,8 +74,67 @@ def clean_post_content(content):
     
     # Usuń nadmiarowe spacje po dodaniu nowych
     content = re.sub(r'\s+', ' ', content)
+
+    # Usuń resztki w stylu "Dodano po ...:" jeżeli pozostały po zdjęciu tagów
+    content = re.sub(r'Dodano po\s+[^:]+:', '', content, flags=re.IGNORECASE)
     
     return content.strip()
+
+
+def strip_quotes_from_html(content: str) -> str:
+    """
+    Usuwa sekcje cytatów z surowego HTML, tak aby ekstrakcja linków
+    dotyczyła wyłącznie oryginalnej treści posta (bez cytatów).
+
+    Obsługiwane przypadki (częste w phpBB i podobnych forach):
+    - <blockquote> ... </blockquote>
+    - <div class="quotewrapper"> ... </div>
+    - <div class="quote"> ... </div> i warianty z klasami zawierającymi "quote"
+    - <div class="quotetitle"> ... </div> (nagłówki cytatów)
+    - <table class="quote"> ... </table>
+    """
+    if not content:
+        return ""
+
+    # Usuń <blockquote> i ich zawartość (iteracyjnie, gdy są zagnieżdżone)
+    prev = None
+    while prev != content:
+        prev = content
+        content = re.sub(r'<blockquote[^>]*>.*?</blockquote>', '', content, flags=re.IGNORECASE | re.DOTALL)
+
+    # Usuń segmenty "Dodano po ..." (również gdy zawierają br)
+    content = re.sub(r'<span[^>]*>\s*<span[^>]*>\s*Dodano po[\s\S]*?</span>\s*</span>', '', content, flags=re.IGNORECASE)
+    content = re.sub(r'<span[^>]*>\s*Dodano po[\s\S]*?</span>', '', content, flags=re.IGNORECASE)
+
+    # Usuń kontenery cytatów (div z klasą zawierającą 'quote') - iteracyjnie, różne warianty klas/atributów
+    patterns = [
+        r'<div[^>]+class="[^"]*quote[^"]*"[^>]*>.*?</div>',
+        r"<div[^>]+class='[^']*quote[^']*'[^>]*>.*?</div>",
+        r'<div[^>]*class=[^>]*quote[^>]*>.*?</div>',
+        r'<div[^>]*id=[^>]*quote[^>]*>.*?</div>'
+    ]
+    changed = True
+    while changed:
+        changed = False
+        for pat in patterns:
+            new_content = re.sub(pat, '', content, flags=re.IGNORECASE | re.DOTALL)
+            if new_content != content:
+                content = new_content
+                changed = True
+
+    # Usuń nagłówki cytatów
+    content = re.sub(r'<div[^>]*class="quotetitle"[^>]*>.*?</div>', '', content, flags=re.IGNORECASE | re.DOTALL)
+    # Usuń <cite> i jego zawartość
+    content = re.sub(r'<cite[^>]*>.*?</cite>', '', content, flags=re.IGNORECASE | re.DOTALL)
+
+    # Usuń wiodące bloki cytatów, jeśli mimo powyższego coś pozostało na początku
+    content = re.sub(r'^(\s*(<blockquote[^>]*>.*?</blockquote>\s*)+)', '', content, flags=re.IGNORECASE | re.DOTALL)
+    content = re.sub(r'^(\s*(<div[^>]+class=["\'][^"\']*quote[^"\']*["\'][^>]*>.*?</div>\s*)+)', '', content, flags=re.IGNORECASE | re.DOTALL)
+
+    # Usuń tabele cytatów (rzadsze, starsze motywy)
+    content = re.sub(r'<table[^>]+class="[^"]*quote[^"]*"[^>]*>.*?</table>', '', content, flags=re.IGNORECASE | re.DOTALL)
+
+    return content
 
 
 def normalize_gender(gender):
@@ -262,3 +330,88 @@ def clean_dolina_modlitwy_post_content(content):
     content = re.sub(r'\s+\n', '\n', content)  # Usuń spacje na końcu linii
     
     return content.strip() 
+
+
+def extract_urls_from_html(content: str, base_url: str = None):
+    """
+    Ekstrahuje listę adresów URL z surowego HTML posta.
+    - Zwraca listę unikalnych URL-i w kolejności pierwszego wystąpienia
+    - Obsługuje href w znacznikach <a> oraz nagie adresy (http/https/www)
+    - Jeśli podany jest base_url, względne href-y są rozwijane do absolutnych
+
+    Args:
+        content (str): Surowa zawartość HTML
+        base_url (str, optional): Bazowy URL do rozwijania linków względnych
+
+    Returns:
+        list[str]: Lista URL-i znalezionych w treści
+    """
+    if not content:
+        return []
+
+    urls = []
+    seen = set()
+    base_host = None
+    try:
+        if base_url:
+            base_host = urlparse(base_url).netloc.lower()
+    except Exception:
+        base_host = None
+
+    # 1) href-y z <a>
+    try:
+        hrefs = re.findall(r'<a[^>]+href=["\'](.*?)["\']', content, flags=re.IGNORECASE)
+        for href in hrefs:
+            link = href.strip()
+            if base_url and (link.startswith('/') or link.startswith('./') or link.startswith('../')):
+                try:
+                    link = urljoin(base_url, link)
+                except Exception:
+                    pass
+            # Pomiń kotwice i schematy nie-HTTP
+            if not link or link.startswith('#') or link.startswith('mailto:'):
+                continue
+            # Pomiń linki wewnętrzne (ten sam host co base_url)
+            try:
+                parsed_link = urlparse(link)
+                link_host = parsed_link.netloc.lower()
+                if base_host and link_host == base_host:
+                    continue
+            except Exception:
+                pass
+            if link and link not in seen:
+                seen.add(link)
+                urls.append(link)
+    except Exception:
+        pass
+
+    # 2) Nagie URL-e (http/https/www)
+    try:
+        naked = re.findall(r'(https?://[^\s<>"\)\]]+|www\.[^\s<>"\)\]]+)', content, flags=re.IGNORECASE)
+        for link in naked:
+            link = link.strip()
+            if not link:
+                continue
+            # Rozwiń względne (dla porządku) i odfiltruj wewnętrzne
+            try:
+                parsed_link = urlparse(link)
+                link_host = parsed_link.netloc.lower()
+                if base_host and link_host == base_host:
+                    continue
+            except Exception:
+                pass
+            # Pomiń duplikaty będące prefiksami/skrótami istniejących hrefów
+            is_prefix_duplicate = False
+            for existing in urls:
+                if existing.startswith(link) or link.startswith(existing):
+                    is_prefix_duplicate = True
+                    break
+            if is_prefix_duplicate:
+                continue
+            if link not in seen:
+                seen.add(link)
+                urls.append(link)
+    except Exception:
+        pass
+
+    return urls

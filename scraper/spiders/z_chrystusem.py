@@ -3,9 +3,9 @@ from urllib.parse import urljoin, urlparse, parse_qs
 import re
 from ..items import ForumItem, ForumSectionItem, ForumThreadItem, ForumUserItem, ForumPostItem
 try:
-    from ..utils import clean_post_content, normalize_gender, parse_polish_date
+    from ..utils import clean_post_content, normalize_gender, parse_polish_date, extract_urls_from_html, strip_quotes_from_html
 except ImportError:
-    from utils import clean_post_content, normalize_gender, parse_polish_date
+    from utils import clean_post_content, normalize_gender, parse_polish_date, extract_urls_from_html, strip_quotes_from_html
 
 
 class ZChrystusemSpider(scrapy.Spider):
@@ -27,48 +27,53 @@ class ZChrystusemSpider(scrapy.Spider):
         # Set do śledzenia odwiedzonych URL-i paginacji w tej sesji
         self.visited_pagination_urls = set()
         self.only_thread_url = only_thread_url
+        # Set do śledzenia odwiedzonych sekcji/subforów, aby ograniczać duplikaty
+        self.visited_section_urls = set()
 
     def start_requests(self):
         """Tryb szybkiego testu: pobierz jedną stronę konkretnego wątku."""
         if getattr(self, 'only_thread_url', None):
             thread_url = self.only_thread_url
-            # URL sekcji z parametru f
+            # Bezpiecznie wylicz URL sekcji (f=) i identyfikator wątku (t=) z URL posta/wątku
             try:
                 from urllib.parse import urlparse, parse_qs, urljoin
                 parsed = urlparse(thread_url)
                 params = parse_qs(parsed.query)
                 f_param = params.get('f', [None])[0]
+                t_param = params.get('t', [None])[0]
                 section_url = urljoin(f"{parsed.scheme}://{parsed.netloc}/", f"viewforum.php?f={f_param}") if f_param else None
             except Exception:
                 section_url = None
+                t_param = None
 
-            # Forum
+            # Wyemituj jedynie ForumItem (nie zmienia nazw sekcji)
             forum_item = ForumItem()
             forum_item['spider_name'] = self.name
             forum_item['title'] = 'Z Chrystusem'
             yield forum_item
 
-            # Sekcja
+            # Jeśli mamy f=, wyemituj minimalną sekcję (dla mapowania w pipeline)
             if section_url:
                 section_item = ForumSectionItem()
                 section_item['title'] = 'manual'
                 section_item['url'] = section_url
                 yield section_item
 
-            # Wątek
-            thread_item = ForumThreadItem()
-            thread_item['title'] = 'manual'
-            thread_item['url'] = thread_url
-            if section_url:
-                thread_item['section_url'] = section_url
-            yield thread_item
+            # Jeśli mamy t= (URL wątku), wyemituj minimalny wątek, aby pipeline utworzył rekord i mapowanie t -> thread_id
+            if t_param:
+                thread_item = ForumThreadItem()
+                thread_item['title'] = 'manual'
+                thread_item['url'] = thread_url
+                if section_url:
+                    thread_item['section_url'] = section_url
+                yield thread_item
 
-            # Parsuj posty
+            # Parsuj posty w podanym wątku/poście
             thread_id = self._get_thread_id_from_url(thread_url)
             yield scrapy.Request(
                 url=thread_url,
                 callback=self.parse_thread_posts,
-                meta={'thread_url': thread_url, 'thread_title': 'manual', 'thread_id': thread_id}
+                meta={'thread_url': thread_url, 'thread_title': None, 'thread_id': thread_id}
             )
             return
         for url in self.start_urls:
@@ -125,6 +130,31 @@ class ZChrystusemSpider(scrapy.Spider):
                 meta={'section_url': full_url, 'section_title': title}
             )
 
+        # Dodatkowo: znajdź subfora wypisane pod sekcjami na stronie głównej
+        subforum_links = response.css('div.forabg a.subforum')
+        self.logger.info(f"Znaleziono {len(subforum_links)} linków do subforów na stronie głównej")
+        for link in subforum_links:
+            sub_title_texts = [t.strip() for t in link.css('::text').getall() if t.strip()]
+            sub_title = sub_title_texts[0] if sub_title_texts else 'subforum'
+            relative_url = link.css('::attr(href)').get()
+            full_url = urljoin(response.url, relative_url)
+
+            if full_url in self.visited_section_urls:
+                continue
+            self.visited_section_urls.add(full_url)
+
+            section_item = ForumSectionItem()
+            section_item['title'] = sub_title
+            section_item['url'] = full_url
+            self.logger.info(f"Yielding subforum section item: {sub_title}")
+            yield section_item
+
+            yield scrapy.Request(
+                url=full_url,
+                callback=self.parse_section_threads,
+                meta={'section_url': full_url, 'section_title': sub_title}
+            )
+
     def parse_section_threads(self, response):
         """
         Parsuje wątki z sekcji forum
@@ -136,12 +166,46 @@ class ZChrystusemSpider(scrapy.Spider):
             ForumThreadItem: Itemy reprezentujące wątki
             scrapy.Request: Requesty do scrapowania postów w wątkach
         """
+        # Najpierw: wykryj subfora w obrębie tej sekcji i wejdź do nich rekurencyjnie
+        subforum_links = response.css('a.subforum')
+        if subforum_links:
+            self.logger.info(f"Znaleziono {len(subforum_links)} subforów w sekcji {response.meta.get('section_title')}")
+        for link in subforum_links:
+            sub_title_texts = [t.strip() for t in link.css('::text').getall() if t.strip()]
+            sub_title = sub_title_texts[0] if sub_title_texts else 'subforum'
+            href = link.css('::attr(href)').get()
+            if not href:
+                continue
+            full_url = urljoin(response.url, href)
+            if full_url in self.visited_section_urls:
+                continue
+            self.visited_section_urls.add(full_url)
+
+            sub_section_item = ForumSectionItem()
+            sub_section_item['title'] = sub_title
+            sub_section_item['url'] = full_url
+            yield sub_section_item
+
+            yield scrapy.Request(
+                url=full_url,
+                callback=self.parse_section_threads,
+                meta={'section_url': full_url, 'section_title': sub_title}
+            )
+
         # Wyciągnij wszystkie wątki z aktualnej strony - struktura HTML zchrystusem.pl
         # Wątki znajdują się w elementach li.row z klasą bg1 lub bg2
         threads = response.css('li.row.bg1, li.row.bg2')
         
-        # Filtruj tylko wiersze z wątkami (nie sticky, nie announcement)
-        valid_threads = [thread for thread in threads if not thread.css('.sticky, .announcement')]
+        # Filtruj tylko wiersze z wątkami (nie sticky, nie announcement/global-announce)
+        valid_threads = []
+        for thread in threads:
+            classes = thread.attrib.get('class', '') if hasattr(thread, 'attrib') else (thread.css('::attr(class)').get() or '')
+            if re.search(r'\b(sticky|announce|announcement|global-announce)\b', classes):
+                continue
+            # Dodatkowo pomiń, jeśli w obrębie elementu są znaczniki typowe dla ogłoszeń
+            if thread.css('.global-announce, .announce, .announcement, .sticky'):
+                continue
+            valid_threads.append(thread)
         
         self.logger.info(f"Znaleziono {len(valid_threads)} wątków w sekcji")
         
@@ -364,11 +428,81 @@ class ZChrystusemSpider(scrapy.Spider):
         thread_url = response.meta.get('thread_url')
         thread_title = response.meta.get('thread_title')
         
+        # Upewnij się, że sekcja (f=) jest zarejestrowana w bazie dla mapowania thread -> section
+        try:
+            section_href = response.css('a[href*="viewforum.php?f="]::attr(href)').get()
+            if section_href:
+                section_abs = urljoin(response.url, section_href)
+                section_item = ForumSectionItem()
+                section_item['title'] = response.meta.get('section_title') or 'manual'
+                section_item['url'] = section_abs
+                yield section_item
+        except Exception:
+            pass
+
         # Znajdź thread_id na podstawie URL
         thread_id = self._get_thread_id_from_url(thread_url)
         if not thread_id:
-            self.logger.warning(f"Nie znaleziono thread_id dla URL: {thread_url}")
-            return None
+            # Fallback: jeśli URL zawiera tylko p=, spróbuj znaleźć link do wątku z t=
+            candidate = response.css('a[href*="viewtopic.php?t="]::attr(href)').get()
+            if candidate:
+                abs_thread_url = urljoin(response.url, candidate)
+                # Ustal parametry t i f
+                try:
+                    parsed = urlparse(abs_thread_url)
+                    params = parse_qs(parsed.query)
+                    t_param = params.get('t', [None])[0]
+                    f_param = params.get('f', [None])[0]
+                except Exception:
+                    t_param = None
+                    f_param = None
+                # Wyemituj sekcję minimalnie (dla mapowania w pipeline)
+                if f_param:
+                    section_url = urljoin(f"{parsed.scheme}://{parsed.netloc}/", f"viewforum.php?f={f_param}")
+                    section_item = ForumSectionItem()
+                    section_item['title'] = 'manual'
+                    section_item['url'] = section_url
+                    yield section_item
+                # Wyemituj minimalny wątek (dla mapowania w pipeline)
+                if t_param:
+                    thread_item = ForumThreadItem()
+                    thread_item['title'] = thread_title or 'manual'
+                    thread_item['url'] = abs_thread_url
+                    if f_param:
+                        thread_item['section_url'] = section_url
+                    yield thread_item
+                    # Zrób powtórne żądanie tej samej strony postów, ale z meta zawierającym thread_url (t=) – zapewnia, że pipeline ma już wątek
+                    yield scrapy.Request(
+                        url=response.url,
+                        callback=self.parse_thread_posts,
+                        meta={'thread_url': abs_thread_url, 'thread_title': thread_title, 'thread_id': t_param}
+                    )
+                    return
+                else:
+                    self.logger.warning(f"Nie udało się wydobyć parametru t= z linku: {abs_thread_url}")
+            else:
+                self.logger.warning(f"Nie znaleziono thread_id ani linku z t= na stronie: {response.url}")
+                return None
+        else:
+            # Mamy thread_id z URL – upewnij się, że wątek istnieje w bazie: wyemituj minimalny wątek, wiążąc go z wykrytą sekcją
+            try:
+                parsed = urlparse(thread_url)
+                params = parse_qs(parsed.query)
+                f_param = params.get('f', [None])[0]
+                section_url = None
+                if f_param:
+                    section_url = urljoin(f"{parsed.scheme}://{parsed.netloc}/", f"viewforum.php?f={f_param}")
+                if section_href and not section_url:
+                    section_url = urljoin(response.url, section_href)
+
+                thread_item = ForumThreadItem()
+                thread_item['title'] = thread_title or 'manual'
+                thread_item['url'] = thread_url
+                if section_url:
+                    thread_item['section_url'] = section_url
+                yield thread_item
+            except Exception:
+                pass
         
         # Wyciągnij wszystkie posty z aktualnej strony - struktura HTML zchrystusem.pl
         # Posty znajdują się w elementach div z id="p..." i klasą "post"
@@ -457,22 +591,32 @@ class ZChrystusemSpider(scrapy.Spider):
             if content_element:
                 # Wyciągnij HTML zawartości
                 content_html = content_element.get()
-                # Wyczyść zawartość używając standardowej funkcji
-                content = clean_post_content(content_html)
+                # Usuń cytaty i ekstrahuj URL-e tylko z oryginalnej treści
+                content_html_no_quotes = strip_quotes_from_html(content_html)
+                content_urls = extract_urls_from_html(content_html_no_quotes, base_url=response.url)
+                # Wyczyść zawartość używając standardowej funkcji NA PODSTAWIE HTML BEZ CYTATÓW
+                content = clean_post_content(content_html_no_quotes)
             
             # Data postu - struktura HTML zchrystusem.pl
             post_date = None
+            # 1) Preferowany tag <time>
             date_element = post.css('p.author time')
             if date_element:
                 date_text = date_element.css('::text').get()
                 if date_text:
                     raw_post_date = date_text.strip()
-                    # Konwertuj polską datę na standardowy format
-                    post_date = parse_polish_date(raw_post_date)
-                    if post_date is None:
-                        # Jeśli nie udało się przekonwertować, użyj oryginalnej daty
-                        post_date = raw_post_date
-                    self.logger.debug(f"Wyciągnięto post_date: {raw_post_date} -> przekonwertowano: {post_date}")
+                    post_date = parse_polish_date(raw_post_date) or raw_post_date
+            # 2) Fallback: surowy tekst w <p class="author">, np. "2022-07-11, 09:07"
+            if not post_date:
+                try:
+                    author_text_all = ' '.join([t.strip() for t in post.css('p.author ::text').getall() if t and t.strip()])
+                    # Wyciągnij wzorzec daty YYYY-MM-DD, HH:MM lub YYYY-MM-DD HH:MM
+                    import re as _re
+                    m = _re.search(r'(\d{4}-\d{2}-\d{2})(?:,)?\s+(\d{1,2}:\d{2})', author_text_all)
+                    if m:
+                        post_date = f"{m.group(1)} {m.group(2)}"
+                except Exception:
+                    pass
             
             # Utwórz item postu
             post_item = ForumPostItem()
@@ -481,6 +625,7 @@ class ZChrystusemSpider(scrapy.Spider):
             post_item['username'] = author  # Dodaj username dla pipeline
             post_item['post_number'] = post_number
             post_item['content'] = content
+            post_item['content_urls'] = content_urls if 'content_urls' in locals() else []
             post_item['post_date'] = post_date
             post_item['url'] = post_url
             

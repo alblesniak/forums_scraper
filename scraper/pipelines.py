@@ -7,7 +7,8 @@ import sqlite3
 import os
 import re
 from datetime import datetime
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
+import json
 from itemadapter import ItemAdapter
 from .items import ForumItem, ForumSectionItem, ForumThreadItem, ForumUserItem, ForumPostItem
 
@@ -101,6 +102,18 @@ def convert_polish_date_to_standard(polish_date_str):
             # Zwróć w formacie YYYY-MM-DD HH:MM:SS
             return dt.strftime('%Y-%m-%d %H:%M:%S')
         
+        # Format numeryczny: "2022-07-11, 09:07" lub "2022-07-11 09:07" (phpBB nowe motywy)
+        pattern3 = r'^(\d{4})-(\d{2})-(\d{2})(?:,|)\s+(\d{1,2}):(\d{2})'
+        match = re.match(pattern3, date_clean)
+        if match:
+            year = int(match.group(1))
+            month = int(match.group(2))
+            day = int(match.group(3))
+            hour = int(match.group(4))
+            minute = int(match.group(5))
+            dt = datetime(year, month, day, hour, minute)
+            return dt.strftime('%Y-%m-%d %H:%M:%S')
+
         # Jeśli żaden wzorzec nie pasuje, zwróć None
         return None
         
@@ -230,6 +243,7 @@ class SQLitePipeline:
                 content TEXT,
                 post_date TEXT,
                 url TEXT,
+                content_urls TEXT,
                 username TEXT,
                 created_at TIMESTAMP,
                 updated_at TIMESTAMP,
@@ -237,6 +251,12 @@ class SQLitePipeline:
                 FOREIGN KEY (user_id) REFERENCES forum_users (id)
             )
         ''')
+
+        # Upewnij się, że kolumna content_urls istnieje w już istniejących bazach
+        try:
+            self.cursor.execute('ALTER TABLE forum_posts ADD COLUMN content_urls TEXT')
+        except sqlite3.OperationalError:
+            pass  # Kolumna już istnieje
         
         self.connection.commit()
         
@@ -273,6 +293,16 @@ class SQLitePipeline:
             # Indeks na forum_id w sekcjach
             self.cursor.execute('CREATE INDEX IF NOT EXISTS idx_sections_forum_id ON forum_sections(forum_id)')
             
+            # Spróbuj dodać unikalne indeksy (mogą się nie udać, jeśli istnieją duplikaty w starej bazie)
+            try:
+                self.cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS uniq_sections_forum_url ON forum_sections(forum_id, url)')
+            except Exception:
+                pass
+            try:
+                self.cursor.execute('CREATE UNIQUE INDEX IF NOT EXISTS uniq_threads_section_url ON forum_threads(section_id, url)')
+            except Exception:
+                pass
+
             self.connection.commit()
             print("Utworzono indeksy dla szybszych zapytań")
             
@@ -306,6 +336,28 @@ class SQLitePipeline:
         
         return item
 
+    def _normalize_url_without_sid(self, raw_url):
+        """Usuwa parametr sid z URL (jeśli istnieje) i zwraca znormalizowany URL."""
+        try:
+            if not raw_url:
+                return raw_url
+            parsed = urlparse(raw_url)
+            # Rozbij parametry zapytania i usuń 'sid'
+            query_params = parse_qs(parsed.query, keep_blank_values=True)
+            if 'sid' in query_params:
+                query_params.pop('sid', None)
+            # Złóż ponownie parametry (obsługa wielu wartości)
+            new_query = urlencode(query_params, doseq=True)
+            normalized = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+            # Usuń ewentualne końcowe znaki '?', '&'
+            if normalized.endswith('?'):
+                normalized = normalized[:-1]
+            if normalized.endswith('&'):
+                normalized = normalized[:-1]
+            return normalized
+        except Exception:
+            return raw_url
+
     def _flush_post_batch(self):
         """Zapisuje batch postów do bazy danych"""
         if not self.post_batch:
@@ -314,10 +366,10 @@ class SQLitePipeline:
         try:
             # UPSERT na bazie unikalności (thread_id, post_number)
             self.cursor.executemany(
-                'INSERT INTO forum_posts (thread_id, user_id, post_number, content, post_date, url, username, created_at, updated_at) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) '
+                'INSERT INTO forum_posts (thread_id, user_id, post_number, content, post_date, url, content_urls, username, created_at, updated_at) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) '
                 'ON CONFLICT(thread_id, post_number) DO UPDATE SET '
-                'content=excluded.content, post_date=excluded.post_date, url=excluded.url, '
+                'content=excluded.content, post_date=excluded.post_date, url=excluded.url, content_urls=excluded.content_urls, '
                 'username=excluded.username, updated_at=excluded.updated_at',
                 self.post_batch
             )
@@ -382,7 +434,9 @@ class SQLitePipeline:
             return adapter.item
         
         title = adapter.get('title')
-        url = adapter.get('url')
+        raw_url = adapter.get('url')
+        # Znormalizuj URL (usuń sid)
+        url = self._normalize_url_without_sid(raw_url)
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         # Sprawdź czy sekcja już istnieje
@@ -407,7 +461,7 @@ class SQLitePipeline:
             )
             section_id = self.cursor.lastrowid
         
-        # Dodaj mapowanie URL sekcji na ID
+        # Dodaj mapowanie URL sekcji na ID (mapuj znormalizowany URL)
         self.section_url_mapping[url] = section_id
         
         self.connection.commit()
@@ -416,7 +470,9 @@ class SQLitePipeline:
     def _process_thread_item(self, adapter):
         """Przetwarza item wątku forum"""
         title = adapter.get('title')
-        url = adapter.get('url')
+        raw_url = adapter.get('url')
+        # Znormalizuj URL (usuń sid)
+        url = self._normalize_url_without_sid(raw_url)
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         # print(f"Pipeline: Przetwarzam wątek '{title}'")
@@ -490,10 +546,11 @@ class SQLitePipeline:
     def _get_section_id_from_section_url(self, section_url):
         """Znajduje section_id na podstawie URL sekcji"""
         try:
-            # Znajdź sekcję na podstawie URL (ignorując sid)
+            # Użyj znormalizowanego URL (bez sid) i dopasuj dokładnie w obrębie bieżącego forum
+            normalized = self._normalize_url_without_sid(section_url)
             self.cursor.execute(
-                'SELECT id FROM forum_sections WHERE url LIKE ?',
-                (f"{section_url.split('&sid=')[0]}%",)
+                'SELECT id FROM forum_sections WHERE forum_id = ? AND url = ?',
+                (self.current_forum_id, normalized)
             )
             result = self.cursor.fetchone()
             if result:
@@ -587,6 +644,7 @@ class SQLitePipeline:
         user_id = adapter.get('user_id')
         post_number = adapter.get('post_number')
         content = adapter.get('content')
+        content_urls_value = adapter.get('content_urls')
         post_date = adapter.get('post_date')
         url = adapter.get('url')
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -630,8 +688,17 @@ class SQLitePipeline:
         # Sprawdź czy post już istnieje (na podstawie thread_id i post_number)
         # Użyj INSERT OR IGNORE zamiast sprawdzania i aktualizacji
         username = adapter.get('username')
+        # Serializuj content_urls do JSON (lista -> string), puste listy jako []
+        try:
+            if isinstance(content_urls_value, str):
+                content_urls_json = content_urls_value
+            else:
+                content_urls_json = json.dumps(content_urls_value or [], ensure_ascii=False)
+        except Exception:
+            content_urls_json = '[]'
+
         self.post_batch.append((
-            thread_id, user_id, post_number, content, post_date, url, username, current_time, current_time
+            thread_id, user_id, post_number, content, post_date, url, content_urls_json, username, current_time, current_time
         ))
         
         # Jeśli batch jest pełny, zapisz go

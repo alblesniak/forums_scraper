@@ -5,6 +5,42 @@ Konfiguracja modułu analizy tokenów
 import os
 from pathlib import Path
 
+# Wczytaj zmienne z pliku .env (repo root) – najpierw przez python-dotenv, a jeśli brak, prosty parser
+def _load_dotenv_if_present() -> None:
+    try:
+        from dotenv import load_dotenv  # type: ignore
+        # Szukaj .env w katalogu głównym repo (rodzic katalogu analysis)
+        root = Path(__file__).resolve().parents[1]
+        env_path = root / ".env"
+        if env_path.exists():
+            load_dotenv(dotenv_path=str(env_path), override=False)
+        else:
+            # Fallback: bieżący katalog roboczy
+            cwd_env = Path.cwd() / ".env"
+            if cwd_env.exists():
+                load_dotenv(dotenv_path=str(cwd_env), override=False)
+    except Exception:
+        # Ręczne, proste wczytanie klucz=wartość (bez obsługi złożonych przypadków)
+        for candidate in [Path(__file__).resolve().parents[1] / ".env", Path.cwd() / ".env"]:
+            try:
+                if candidate.exists():
+                    with open(candidate, "r", encoding="utf-8") as f:
+                        for line in f:
+                            s = line.strip()
+                            if not s or s.startswith("#"):
+                                continue
+                            if "=" in s:
+                                k, v = s.split("=", 1)
+                                k = k.strip()
+                                v = v.strip().strip('"').strip("'")
+                                if k and (k not in os.environ):
+                                    os.environ[k] = v
+                    break
+            except Exception:
+                pass
+
+_load_dotenv_if_present()
+
 # Ścieżki baz danych
 DEFAULT_SOURCE_DB = "../data/databases/merged_forums.db"
 DEFAULT_ANALYSIS_DB = "../data/databases/analysis_forums.db"
@@ -71,6 +107,25 @@ MONITORING_CONFIG = {
     'alert_threshold_memory': 80,  # Próg użycia pamięci do alertu (%)
 }
 
+# Konfiguracja LLM (OpenRouter domyślnie)
+# Domyślnie korzystamy z OpenRouter (kompatybilny klient OpenAI z base_url).
+# Można nadpisać przez LLM_PROVIDER=openai oraz OPENAI_API_KEY.
+LLM_CONFIG = {
+    'provider': os.environ.get('LLM_PROVIDER', 'openrouter'),
+    'model': os.environ.get('LLM_MODEL', 'gpt-5-mini'),
+    'temperature': float(os.environ.get('LLM_TEMPERATURE', 0.5)),
+    'max_tokens': int(os.environ.get('LLM_MAX_TOKENS', 800)),
+    # Klucz: preferuj OPENROUTER_API_KEY, fallback do OPENAI_API_KEY
+    'api_key': os.environ.get('OPENROUTER_API_KEY', os.environ.get('OPENAI_API_KEY', '')),
+    # Endpoint dla OpenRouter; dla OpenAI pozostaw puste lub nadpisz env
+    'base_url': os.environ.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+    # Nagłówki identyfikujące aplikację (opcjonalne dla OpenRouter)
+    'default_headers': {
+        **({'HTTP-Referer': os.environ.get('OPENROUTER_HTTP_REFERER', '')} if os.environ.get('OPENROUTER_HTTP_REFERER') else {}),
+        **({'X-Title': os.environ.get('OPENROUTER_APP_TITLE', '')} if os.environ.get('OPENROUTER_APP_TITLE') else {}),
+    },
+}
+
 def get_config():
     """Zwraca konfigurację z możliwością nadpisania zmiennymi środowiskowymi"""
     config = {
@@ -124,12 +179,7 @@ def validate_config(config):
         except Exception as e:
             errors.append(f"Nie można utworzyć katalogu: {analysis_dir} - {e}")
     
-    log_dir = Path(config['logging']['file']).parent
-    if not log_dir.exists():
-        try:
-            log_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            errors.append(f"Nie można utworzyć katalogu logów: {log_dir} - {e}")
+    # Nie twórz katalogu logów tutaj – zostanie utworzony przy inicjalizacji loggera
     
     return errors
 

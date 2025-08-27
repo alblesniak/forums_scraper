@@ -245,18 +245,48 @@ class DatabaseMerger:
                     
                     rows = processed_rows
                 
-                # Jeśli mamy offset dla ID, zaktualizuj dane
-                if offset_ids and table_name in offset_ids:
-                    offset = offset_ids[table_name]
+                # Jeśli mamy offsety, zaktualizuj ID oraz klucze obce zależnie od tabeli
+                if offset_ids:
                     updated_rows = []
-                    
+                    # Zbuduj mapę indeksów kolumn dla wygody
+                    column_index = {name: idx for idx, name in enumerate(column_names)}
+
                     for row in rows:
                         row_list = list(row)
-                        # Zakładamy, że ID jest pierwszą kolumną
-                        if row_list[0] is not None:  # Jeśli ID nie jest NULL
-                            row_list[0] += offset
+
+                        # Zawsze przesuwaj własne ID jeśli dotyczy
+                        if table_name in offset_ids and row_list and row_list[0] is not None:
+                            row_list[0] = row_list[0] + offset_ids[table_name]
+
+                        # Przesuwaj klucze obce zgodnie z tabelą nadrzędną
+                        if table_name == "forum_sections":
+                            # forum_sections.forum_id odnosi się do forums.id
+                            if "forum_id" in column_index and row_list[column_index["forum_id"]] is not None:
+                                if "forums" in offset_ids:
+                                    row_list[column_index["forum_id"]] = row_list[column_index["forum_id"]] + offset_ids["forums"]
+
+                        elif table_name == "forum_threads":
+                            # forum_threads.section_id odnosi się do forum_sections.id
+                            if "section_id" in column_index and row_list[column_index["section_id"]] is not None:
+                                if "forum_sections" in offset_ids:
+                                    row_list[column_index["section_id"]] = row_list[column_index["section_id"]] + offset_ids["forum_sections"]
+
+                        elif table_name == "forum_posts":
+                            # forum_posts.thread_id odnosi się do forum_threads.id
+                            if "thread_id" in column_index and row_list[column_index["thread_id"]] is not None:
+                                if "forum_threads" in offset_ids:
+                                    row_list[column_index["thread_id"]] = row_list[column_index["thread_id"]] + offset_ids["forum_threads"]
+                            # forum_posts.user_id (jeśli istnieje) do forum_users.id
+                            if "user_id" in column_index and row_list[column_index["user_id"]] is not None:
+                                if "forum_users" in offset_ids:
+                                    row_list[column_index["user_id"]] = row_list[column_index["user_id"]] + offset_ids["forum_users"]
+
+                        elif table_name == "forum_users":
+                            # forum_users może mieć user_id? (zwykle nie), nic do przesunięcia poza własnym ID
+                            pass
+
                         updated_rows.append(tuple(row_list))
-                    
+
                     rows = updated_rows
                 
                 # Wstaw dane w mniejszych partiach dla lepszej wydajności
@@ -348,7 +378,7 @@ class DatabaseMerger:
             print("   📊 Statystyki połączonej bazy:")
             
             # Sprawdź fora
-            cursor.execute("SELECT id, spider_name, COUNT(fs.id) as sections, COUNT(fp.id) as posts FROM forums f LEFT JOIN forum_sections fs ON f.id = fs.forum_id LEFT JOIN forum_threads ft ON fs.id = ft.section_id LEFT JOIN forum_posts fp ON ft.id = fp.thread_id GROUP BY f.id, f.spider_name;")
+            cursor.execute("SELECT f.id as forum_id, f.spider_name, COUNT(fs.id) as sections, COUNT(fp.id) as posts FROM forums f LEFT JOIN forum_sections fs ON f.id = fs.forum_id LEFT JOIN forum_threads ft ON fs.id = ft.section_id LEFT JOIN forum_posts fp ON ft.id = fp.thread_id GROUP BY f.id, f.spider_name;")
             forums_stats = cursor.fetchall()
             
             for forum_id, spider_name, sections, posts in forums_stats:

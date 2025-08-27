@@ -63,6 +63,7 @@ class ForumPostItem(scrapy.Item):
     user_id = scrapy.Field()
     post_number = scrapy.Field()
     content = scrapy.Field()
+    content_urls = scrapy.Field()  # Lista URL-i występujących w treści (po czyszczeniu usuwane z content)
     post_date = scrapy.Field()
     url = scrapy.Field()  # URL bezpośredni do posta
     created_at = scrapy.Field()

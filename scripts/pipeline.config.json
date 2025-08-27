@@ -1,31 +1,16 @@
 {
-  "databases": {
-    "dir": "data/databases",
-    "source_dbs_glob": "forum_*.db",
-    "merged": "merged_forums.db",
-    "analysis": "analysis_forums.db"
-  },
-  "analysis": {
-    "forums": ["wiara"],
-    "use_multiprocessing": true,
-    "max_workers": 4,
-    "chunk_size": 50,
-    "batch_size": 100
-  },
+  "databases": { "analysis": "merged_forums.db" },
   "topics": {
-    "forums": ["wiara"],
-    "genders": ["M", "K"],
+    "forums": ["ALL"],
+    "genders": ["M"],
     "output_dir": "data/topics",
-    "combine_forums": false,
-    "combined_forum_names": ["radio_katolik", "dolina_modlitwy"]
-  },
-  "clean": {
-    "keep_merged": true,
-    "keep_analysis": true,
-    "remove_per_forum": true,
-    "backup": false,
-    "backup_dir": "backups"
+    "combine_forums": true,
+    "combined_forum_names": ["ALL"],
+    "keep_documents_in_model": true,
+    "embedding_model": "doc2vec",
+    "random_seed": "auto",
+    "excluded_sections": [
+      "REGULAMIN", "Kosz", "KOSZ", "Regulamin forum", "Informacje forumowe", "Uwagi o serwisie", "Archiwum"
+    ]
   }
 }
-
-

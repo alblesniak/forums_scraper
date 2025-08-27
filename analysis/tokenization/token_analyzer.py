@@ -21,20 +21,7 @@ import multiprocessing as mp
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from tqdm import tqdm
 
-# Konfiguracja logowania (utwórz katalog 'logs' jeśli nie istnieje)
-try:
-    Path('data/logs').mkdir(parents=True, exist_ok=True)
-except Exception:
-    pass
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('data/logs/token_analysis.log'),
-        logging.StreamHandler()
-    ]
-)
+DEFAULT_LOG_FILE = Path('data/logs/token_analysis.log')
 
 @dataclass
 class TokenAnalysisResult:
@@ -58,7 +45,28 @@ class TokenAnalyzer:
                  config: Dict = None, forums_to_analyze: List[str] = None):
         self.source_db = source_db
         self.analysis_db = analysis_db
+        # Konfiguracja logowania tylko przy tworzeniu analizatora
         self.logger = logging.getLogger(__name__)
+        if not self.logger.handlers:
+            self.logger.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+            # Strumień na konsolę
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(formatter)
+            self.logger.addHandler(stream_handler)
+
+            # Plik logów (utwórz katalog dopiero teraz)
+            try:
+                log_file = DEFAULT_LOG_FILE
+                log_file.parent.mkdir(parents=True, exist_ok=True)
+                file_handler = logging.FileHandler(str(log_file))
+                file_handler.setFormatter(formatter)
+                self.logger.addHandler(file_handler)
+            except Exception:
+                # Jeśli nie można zapisać do pliku, kontynuuj tylko z konsolą
+                pass
+            self.logger.propagate = False
         self.lock = threading.Lock()
         
         # Konfiguracja
@@ -69,7 +77,8 @@ class TokenAnalyzer:
                 self.config = full_config['tokenization']
                 self.multiprocessing_config = full_config['multiprocessing']
                 if forums_to_analyze is None:
-                    self.forums_to_analyze = full_config['forums_to_analyze']
+                    # forums_to_analyze=None oznacza auto-detekcję z bazy
+                    self.forums_to_analyze = None
                 else:
                     self.forums_to_analyze = forums_to_analyze
             except ImportError:
@@ -96,7 +105,8 @@ class TokenAnalyzer:
                 'process_timeout': 300
             })
             if forums_to_analyze is None:
-                self.forums_to_analyze = ['radio_katolik', 'dolina_modlitwy']
+                # forums_to_analyze=None oznacza auto-detekcję z bazy
+                self.forums_to_analyze = None
             else:
                 self.forums_to_analyze = forums_to_analyze
         
@@ -112,35 +122,28 @@ class TokenAnalyzer:
             'processing_errors': 0,
             'spacy_tokens': 0,
             'simple_tokens': 0,
-            'forums_analyzed': self.forums_to_analyze.copy()
+            'forums_analyzed': (self.forums_to_analyze or []).copy()
         }
     
     def create_analysis_database(self) -> bool:
         """
-        Tworzy kopię bazy danych do analizy
-        Dodaje tabele do przechowywania wyników analizy
+        Przygotowuje bazę analizy (bez kopiowania bazy źródłowej).
+        Tworzy tylko tabele wynikowe w bazie analizy.
         """
         try:
             self.logger.info(f"Tworzenie bazy analizy: {self.analysis_db}")
             
             # Upewnij się, że katalog docelowy istnieje
-            analysis_path = Path(self.analysis_db)
-            analysis_path.parent.mkdir(parents=True, exist_ok=True)
+            analysis_dir = Path(self.analysis_db).parent
+            analysis_dir.mkdir(parents=True, exist_ok=True)
 
-            # Usuń istniejącą bazę analizy jeśli istnieje
-            if os.path.exists(self.analysis_db):
-                os.remove(self.analysis_db)
-                self.logger.info("Usunięto istniejącą bazę analizy")
-            
-            # Skopiuj strukturę z oryginalnej bazy
             if not os.path.exists(self.source_db):
                 raise FileNotFoundError(f"Brak bazy źródłowej do analizy: {self.source_db}")
-            shutil.copy2(self.source_db, self.analysis_db)
-            self.logger.info("Skopiowano strukturę bazy danych")
+
+            # Nie kopiujemy bazy źródłowej; baza analizy zawiera jedynie tabele wynikowe.
             
             # Dodaj tabele analizy
-            conn = sqlite3.connect(self.analysis_db)
-            cursor = conn.cursor()
+            conn, cursor, src = self._open_connection_with_source()
             
             # Tabela wyników analizy tokenów
             cursor.execute("""
@@ -186,6 +189,21 @@ class TokenAnalyzer:
         except Exception as e:
             self.logger.error(f"Błąd tworzenia bazy analizy: {e}")
             return False
+    
+    def _open_connection_with_source(self) -> Tuple[sqlite3.Connection, sqlite3.Cursor, str]:
+        """
+        Otwiera połączenie do bazy analizy. Jeśli pliki bazy źródłowej i analizy
+        są różne, dołącza bazę źródłową jako alias 'src' i zwraca prefiks 'src.'.
+        Jeśli są takie same (tryb in-place), zwraca pusty prefiks ''.
+        """
+        conn = sqlite3.connect(self.analysis_db)
+        cursor = conn.cursor()
+        analysis_abs = os.path.abspath(self.analysis_db)
+        source_abs = os.path.abspath(self.source_db)
+        if analysis_abs != source_abs:
+            cursor.execute("ATTACH DATABASE ? AS src", (self.source_db,))
+            return conn, cursor, "src."
+        return conn, cursor, ""
     
     def calculate_tokens(self, text: str) -> Dict[str, int]:
         """
@@ -358,23 +376,31 @@ class TokenAnalyzer:
         lub których treść się zmieniła
         """
         try:
-            conn = sqlite3.connect(self.analysis_db)
-            cursor = conn.cursor()
+            conn, cursor, src = self._open_connection_with_source()
             
+            # Jeżeli fora nie zostały jawnie ustawione, wykryj je z bazy
+            if not self.forums_to_analyze:
+                cursor.execute(f"SELECT spider_name FROM {src}forums")
+                detected_forums = [row[0] for row in cursor.fetchall()]
+                self.forums_to_analyze = detected_forums
+
             # Pobierz posty z określonych forów, które nie mają analizy
-            cursor.execute("""
+            placeholders = ','.join(['?' for _ in self.forums_to_analyze])
+            cursor.execute(
+                f"""
                 SELECT p.id, p.content 
-                FROM forum_posts p
-                JOIN forum_threads t ON p.thread_id = t.id
-                JOIN forum_sections s ON t.section_id = s.id
-                JOIN forums f ON s.forum_id = f.id
+                FROM {src}forum_posts p
+                JOIN {src}forum_threads t ON p.thread_id = t.id
+                JOIN {src}forum_sections s ON t.section_id = s.id
+                JOIN {src}forums f ON s.forum_id = f.id
                 LEFT JOIN token_analysis ta ON p.id = ta.post_id
-                WHERE f.spider_name IN ({})
+                WHERE f.spider_name IN ({placeholders})
                   AND ta.post_id IS NULL
                 ORDER BY p.id
                 LIMIT ?
-            """.format(','.join(['?' for _ in self.forums_to_analyze])), 
-            self.forums_to_analyze + [batch_size])
+                """,
+                self.forums_to_analyze + [batch_size]
+            )
             
             posts = cursor.fetchall()
             conn.close()
@@ -390,8 +416,7 @@ class TokenAnalyzer:
         Zapisuje wynik analizy do bazy
         """
         try:
-            conn = sqlite3.connect(self.analysis_db)
-            cursor = conn.cursor()
+            conn, cursor, src = self._open_connection_with_source()
             
             cursor.execute("""
                 INSERT OR REPLACE INTO token_analysis 
@@ -424,8 +449,7 @@ class TokenAnalyzer:
             if not batch_results:
                 return
                 
-            conn = sqlite3.connect(self.analysis_db)
-            cursor = conn.cursor()
+            conn, cursor, src = self._open_connection_with_source()
             
             # Oblicz statystyki dla partii
             total_tokens = sum(r.token_count for r in batch_results)
@@ -694,14 +718,13 @@ class TokenAnalyzer:
         Zwraca podsumowanie analizy
         """
         try:
-            conn = sqlite3.connect(self.analysis_db)
-            cursor = conn.cursor()
+            conn, cursor, src = self._open_connection_with_source()
             
             # Pobierz ogólne statystyki
             cursor.execute("SELECT COUNT(*) FROM token_analysis")
             total_analyzed = cursor.fetchone()[0]
             
-            cursor.execute("SELECT COUNT(*) FROM forum_posts")
+            cursor.execute(f"SELECT COUNT(*) FROM {src}forum_posts")
             total_posts = cursor.fetchone()[0]
             
             cursor.execute("SELECT SUM(token_count) FROM token_analysis")
@@ -774,6 +797,13 @@ class TokenAnalyzer:
         Analizuje wszystkie posty z określonych forów
         """
         try:
+            # Zapewnij, że fora są wykryte zanim wypiszemy log
+            if not self.forums_to_analyze:
+                conn_probe, cur_probe, src = self._open_connection_with_source()
+                cur_probe.execute(f"SELECT spider_name FROM {src}forums")
+                self.forums_to_analyze = [row[0] for row in cur_probe.fetchall()]
+                conn_probe.close()
+
             self.logger.info(f"Rozpoczynam analizę wszystkich postów z forów: {', '.join(self.forums_to_analyze)}")
             
             # Pobierz całkowitą liczbę postów do analizy
@@ -781,7 +811,11 @@ class TokenAnalyzer:
             
             if total_posts == 0:
                 self.logger.info("Brak postów do analizy")
-                return {'total_analyzed': 0, 'total_posts': 0}
+                return {
+                    'total_analyzed': 0,
+                    'total_posts': 0,
+                    'forums_analyzed': self.forums_to_analyze
+                }
             
             self.logger.info(f"Znaleziono {total_posts} postów do analizy")
             
@@ -833,29 +867,40 @@ class TokenAnalyzer:
             
         except Exception as e:
             self.logger.error(f"Błąd analizy wszystkich postów: {e}")
-            return {'total_analyzed': 0, 'total_posts': 0, 'error': str(e)}
+            return {
+                'total_analyzed': 0,
+                'total_posts': 0,
+                'forums_analyzed': self.forums_to_analyze,
+                'error': str(e)
+            }
     
     def _get_total_posts_to_analyze(self) -> int:
         """
         Pobiera całkowitą liczbę postów do analizy z określonych forów
         """
         try:
-            conn = sqlite3.connect(self.analysis_db)
-            cursor = conn.cursor()
+            conn, cursor, src = self._open_connection_with_source()
             
-            cursor.execute("""
+            # Jeżeli fora nie zostały jawnie ustawione, wykryj je z bazy
+            if not self.forums_to_analyze:
+                cursor.execute(f"SELECT spider_name FROM {src}forums")
+                detected_forums = [row[0] for row in cursor.fetchall()]
+                self.forums_to_analyze = detected_forums
+
+            placeholders = ','.join(['?' for _ in self.forums_to_analyze])
+            cursor.execute(
+                f"""
                 SELECT COUNT(*)
-                FROM forum_posts p
-                JOIN forum_threads t ON p.thread_id = t.id
-                JOIN forum_sections s ON t.section_id = s.id
-                JOIN forums f ON s.forum_id = f.id
+                FROM {src}forum_posts p
+                JOIN {src}forum_threads t ON p.thread_id = t.id
+                JOIN {src}forum_sections s ON t.section_id = s.id
+                JOIN {src}forums f ON s.forum_id = f.id
                 LEFT JOIN token_analysis ta ON p.id = ta.post_id
-                WHERE f.spider_name IN ({})
-                  AND (ta.post_id IS NULL 
-                       OR ta.analysis_hash != ?
-                       OR p.content IS NULL)
-            """.format(','.join(['?' for _ in self.forums_to_analyze])), 
-            self.forums_to_analyze + [self.generate_analysis_hash("")])
+                WHERE f.spider_name IN ({placeholders})
+                  AND ta.post_id IS NULL
+                """,
+                self.forums_to_analyze
+            )
             
             count = cursor.fetchone()[0]
             conn.close()
@@ -871,33 +916,44 @@ class TokenAnalyzer:
         Zwraca informacje o forach do analizy
         """
         try:
-            conn = sqlite3.connect(self.analysis_db)
-            cursor = conn.cursor()
+            conn, cursor, src = self._open_connection_with_source()
             
             forums_info = []
+            # Jeżeli fora nie zostały jawnie ustawione, wykryj je z bazy
+            if not self.forums_to_analyze:
+                cursor.execute(f"SELECT spider_name FROM {src}forums")
+                detected_forums = [row[0] for row in cursor.fetchall()]
+                self.forums_to_analyze = detected_forums
+
             for forum_name in self.forums_to_analyze:
                 # Pobierz liczbę postów w forum
-                cursor.execute("""
+                cursor.execute(
+                    f"""
                     SELECT COUNT(*)
-                    FROM forum_posts p
-                    JOIN forum_threads t ON p.thread_id = t.id
-                    JOIN forum_sections s ON t.section_id = s.id
-                    JOIN forums f ON s.forum_id = f.id
+                    FROM {src}forum_posts p
+                    JOIN {src}forum_threads t ON p.thread_id = t.id
+                    JOIN {src}forum_sections s ON t.section_id = s.id
+                    JOIN {src}forums f ON s.forum_id = f.id
                     WHERE f.spider_name = ?
-                """, (forum_name,))
+                    """,
+                    (forum_name,)
+                )
                 
                 total_posts = cursor.fetchone()[0]
                 
                 # Pobierz liczbę przeanalizowanych postów
-                cursor.execute("""
+                cursor.execute(
+                    f"""
                     SELECT COUNT(*)
-                    FROM forum_posts p
-                    JOIN forum_threads t ON p.thread_id = t.id
-                    JOIN forum_sections s ON t.section_id = s.id
-                    JOIN forums f ON s.forum_id = f.id
+                    FROM {src}forum_posts p
+                    JOIN {src}forum_threads t ON p.thread_id = t.id
+                    JOIN {src}forum_sections s ON t.section_id = s.id
+                    JOIN {src}forums f ON s.forum_id = f.id
                     JOIN token_analysis ta ON p.id = ta.post_id
                     WHERE f.spider_name = ?
-                """, (forum_name,))
+                    """,
+                    (forum_name,)
+                )
                 
                 analyzed_posts = cursor.fetchone()[0]
                 

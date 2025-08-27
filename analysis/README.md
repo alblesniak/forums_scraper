@@ -41,6 +41,7 @@ export ANALYSIS_INTERVAL=300
 ### Domyślne fora
 
 Domyślnie analizowane są fora:
+
 - `radio_katolik`
 - `dolina_modlitwy`
 
@@ -159,6 +160,7 @@ python cli.py --continuous --interval 60
 ### Logi
 
 Logi są zapisywane w katalogu `logs/`:
+
 - `token_analysis.log` - Główne logi analizy
 - `analysis_daemon.log` - Logi daemon (jeśli używany)
 
@@ -257,6 +259,71 @@ analysis/
 ├── test_analysis.py      # Testy
 └── requirements.txt      # Zależności
 ```
+
+## 🧭 Generator taksonomii i promptu (Excel + LLM)
+
+Moduł w `analysis/topic_modeling/prompt_builder.py` generuje 3‑poziomową taksonomię i finalny prompt systemowy wyłącznie z pliku Excel z postami. Pipeline działa wieloetapowo: streszczenia + cytat, propozycje głównych kategorii, konsolidacja, indukcja poziomów 2/3, numeracja, przypisania postów, eksport artefaktów oraz wygenerowanie docelowego system_message (PL).
+
+### Wymagania (OpenRouter + DeepSeek R1 0528)
+
+- Zależność `openai` (klient 1.x z obsługą `base_url`)
+- Domyślna konfiguracja `LLM_CONFIG` wskazuje OpenRouter i model `deepseek/deepseek-r1-0528:free`.
+- Zmienna środowiskowa z kluczem:
+
+```bash
+export OPENROUTER_API_KEY="sk-or-..."
+# opcjonalnie
+export OPENROUTER_HTTP_REFERER="https://twoja-aplikacja.example"
+export OPENROUTER_APP_TITLE="Forums Scraper"
+```
+
+Możesz nadpisać endpoint i parametry:
+
+```bash
+export OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
+export LLM_MODEL="deepseek/deepseek-r1-0528:free"
+export LLM_TEMPERATURE=0.7
+export LLM_MAX_TOKENS=1000
+```
+
+Źródło modelu: [DeepSeek: R1 0528 (free) — OpenRouter](https://openrouter.ai/deepseek/deepseek-r1-0528:free)
+
+### Dane wejściowe (Excel)
+
+Minimalne kolumny: `post_id` (jeśli brak, nadamy sekwencyjnie) i `content` (treść posta). Pozostałe kolumny zostaną zachowane.
+
+### Uruchomienie (z katalogu głównego repo)
+
+```bash
+python scripts/pipeline.py taxonomy \
+  --taxonomy-excel data/topics/results/20250821/M/ALL/185832/examples/topic_2_pi_pis_sld.xlsx \
+  --taxonomy-theme polityka \
+  --taxonomy-batch 50 \
+  --taxonomy-max-posts 500
+```
+
+Parametry są opcjonalne – jeśli nie podasz `--taxonomy-theme`, slug tematu zostanie wyciągnięty z nazwy pliku Excela (i zsanityzowany: małe litery, myślniki). Jeśli podasz `--taxonomy-theme`, zostanie on także zsanityzowany do slug'a.
+
+### Artefakty
+
+Pliki wynikowe trafiają do:
+
+```
+data/topics/taxonomies/<YYYYMMDD>/<theme_slug>_<HHMMSS>/
+```
+
+Zawartość:
+
+- `taxonomy.json` – znumerowana taksonomia (`1`, `1.1`, `1.1.1`)
+- `prompt_system_message.md` – gotowy system_message (PL)
+- `assignments.jsonl` – przypisania: `post_id`, `path` (np. `3.2.5`), `confidence`
+- `labeled_<oryginalny_plik>.xlsx` – Excel z kolumnami: `summary`, `quote`, `path`, `confidence`
+
+### Wskazówki
+
+- Dobierz sensowny temat (`--taxonomy-theme`) – wpływa na jakość nazw
+- `--taxonomy-batch` dopasuj do limitów tokenów (50–100 zwykle OK)
+- Gdy wiele przypisań ma niskie `confidence`, zwiększ zbiór lub zawęź temat
 
 ## 🤝 Wsparcie
 
