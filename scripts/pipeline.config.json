@@ -12,5 +12,13 @@
     "excluded_sections": [
       "REGULAMIN", "Kosz", "KOSZ", "Regulamin forum", "Informacje forumowe", "Uwagi o serwisie", "Archiwum"
     ]
+  },
+  "gender": {
+    "weights": {},
+    "thresholds": {
+      "min_total": 2,
+      "min_diff": 1,
+      "strong_single_diff": 1
+    }
   }
 }
