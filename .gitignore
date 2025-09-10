@@ -61,6 +61,12 @@ data/
 presentation/data/topics/results/visualizations/K/**/*.png
 presentation/data/topics/results/visualizations/M/**/*.png
 
+# GitHub Pages docs folder (copy of presentation)
+!docs/
+!docs/**
+docs/data/topics/results/visualizations/K/**/*.png
+docs/data/topics/results/visualizations/M/**/*.png
+
 # Large zip files
 *.zip
 
