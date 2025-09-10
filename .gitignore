@@ -66,6 +66,9 @@ presentation/data/topics/results/visualizations/M/**/*.png
 !docs/**
 docs/data/topics/results/visualizations/K/**/*.png
 docs/data/topics/results/visualizations/M/**/*.png
+# But allow wordcloud images needed for presentation
+!docs/data/topics/results/visualizations/K/wordclouds/*wordcloud.png
+!docs/data/topics/results/visualizations/M/wordclouds/*wordcloud.png
 
 # Large zip files
 *.zip
