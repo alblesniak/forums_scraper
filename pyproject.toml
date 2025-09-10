@@ -20,6 +20,7 @@ dependencies = [
     "openai>=1.44.0",
     "openpyxl>=3.1.5",
     "python-dotenv>=1.0.1",
+    "python-pptx>=1.0.2",
 ]
 
 [project.scripts]
@@ -27,6 +28,7 @@ run-scrapers = "scripts.run_all_scrapers_final:main"
 test-scraper = "scripts.test_single_scraper:main"
 merge-databases = "scripts.merge_all_databases:main"
 token-analysis = "analysis.cli:main"
+topic-model-summary = "analysis.topic_modeling.model_summary:main"
 
 [tool.uv.sources]
 top2vec = { git = "https://github.com/alblesniak/Top2Vec.git" }

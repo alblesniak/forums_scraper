@@ -17,6 +17,7 @@ class DatabaseMerger:
         self.source_dbs = []
         self.max_ids = {}  # Maksymalne ID dla każdej tabeli
         self.offset_ids = {}  # Offset ID dla każdej tabeli i bazy
+        self.db_dir = os.path.dirname(self.target_db) or "data/databases"
         
     def find_databases(self):
         """Znajduje wszystkie pliki .db w katalogu"""
@@ -137,6 +138,144 @@ class DatabaseMerger:
             return False
         
         return True
+
+    def _ensure_analysis_tables(self) -> None:
+        """Zapewnia istnienie tabel analitycznych w bazie docelowej."""
+        conn = sqlite3.connect(self.target_db)
+        cur = conn.cursor()
+        # token_analysis
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS token_analysis (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                token_count INTEGER NOT NULL,
+                word_count INTEGER NOT NULL,
+                character_count INTEGER NOT NULL,
+                analysis_hash TEXT NOT NULL,
+                analyzed_at TIMESTAMP NOT NULL,
+                processing_time_ms REAL NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(post_id)
+            )
+            """
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_token_analysis_post_id ON token_analysis(post_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_token_analysis_date ON token_analysis(analyzed_at)")
+
+        # analysis_stats
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS analysis_stats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                analysis_date DATE NOT NULL,
+                posts_analyzed INTEGER NOT NULL,
+                total_tokens INTEGER NOT NULL,
+                total_words INTEGER NOT NULL,
+                total_characters INTEGER NOT NULL,
+                processing_time_seconds REAL NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_analysis_stats_date ON analysis_stats(analysis_date)")
+
+        # gender_predictions
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS gender_predictions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                predicted_gender TEXT,
+                score_m REAL,
+                score_k REAL,
+                evidence_count INTEGER,
+                posts_with_evidence INTEGER,
+                method TEXT,
+                evidence_json TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP
+            )
+            """
+        )
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_gender_predictions_user ON gender_predictions(user_id)")
+        conn.commit()
+        conn.close()
+
+    def _merge_analysis_for_forum(self, forum_name: str, offset_ids: dict | None) -> None:
+        """Scal tabele analityczne z per-forum analizy (jeśli istnieją) do bazy docelowej.
+        Oczekuje pliku analysis_forums_<forum>.db w tym samym katalogu co target.
+        """
+        # Wywnioskuj ścieżkę analizy per-forum
+        cand = os.path.join(self.db_dir, f"analysis_forums_{forum_name}.db")
+        if not os.path.exists(cand):
+            return
+        try:
+            print(f"   ➕ Dołączanie analityki z: {cand}")
+            self._ensure_analysis_tables()
+
+            src_conn = sqlite3.connect(cand)
+            src_cur = src_conn.cursor()
+            tgt_conn = sqlite3.connect(self.target_db)
+            tgt_cur = tgt_conn.cursor()
+
+            # Oblicz przesunięcia
+            post_off = int((offset_ids or {}).get("forum_posts", 0) or 0)
+            user_off = int((offset_ids or {}).get("forum_users", 0) or 0)
+
+            # token_analysis
+            try:
+                src_cur.execute("SELECT post_id, token_count, word_count, character_count, analysis_hash, analyzed_at, processing_time_ms, created_at FROM token_analysis")
+                rows = src_cur.fetchall()
+                if rows:
+                    ins = (
+                        "INSERT OR IGNORE INTO token_analysis (post_id, token_count, word_count, character_count, analysis_hash, analyzed_at, processing_time_ms, created_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    )
+                    batch = []
+                    for r in rows:
+                        pid = (r[0] or 0) + post_off
+                        batch.append((pid, r[1], r[2], r[3], r[4], r[5], r[6], r[7]))
+                    tgt_cur.executemany(ins, batch)
+            except sqlite3.Error as e:
+                print(f"      ⚠️ token_analysis: {e}")
+
+            # analysis_stats (kopiuj 1:1)
+            try:
+                src_cur.execute("SELECT analysis_date, posts_analyzed, total_tokens, total_words, total_characters, processing_time_seconds, created_at FROM analysis_stats")
+                rows = src_cur.fetchall()
+                if rows:
+                    ins = (
+                        "INSERT INTO analysis_stats (analysis_date, posts_analyzed, total_tokens, total_words, total_characters, processing_time_seconds, created_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    )
+                    tgt_cur.executemany(ins, rows)
+            except sqlite3.Error as e:
+                print(f"      ⚠️ analysis_stats: {e}")
+
+            # gender_predictions
+            try:
+                src_cur.execute("SELECT user_id, predicted_gender, score_m, score_k, evidence_count, posts_with_evidence, method, evidence_json, created_at, updated_at FROM gender_predictions")
+                rows = src_cur.fetchall()
+                if rows:
+                    ins = (
+                        "INSERT OR REPLACE INTO gender_predictions (user_id, predicted_gender, score_m, score_k, evidence_count, posts_with_evidence, method, evidence_json, created_at, updated_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    )
+                    batch = []
+                    for r in rows:
+                        uid = (r[0] or 0) + user_off
+                        batch.append((uid, r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9]))
+                    tgt_cur.executemany(ins, batch)
+            except sqlite3.Error as e:
+                print(f"      ⚠️ gender_predictions: {e}")
+
+            tgt_conn.commit()
+            src_conn.close()
+            tgt_conn.close()
+            print("   ✅ Złączono analitykę dla forum:", forum_name)
+        except Exception as e:
+            print(f"   ⚠️ Błąd łączenia analityki ({forum_name}): {e}")
     
     def get_max_ids_from_target(self):
         """Pobiera maksymalne ID z docelowej bazy"""
@@ -305,6 +444,11 @@ class DatabaseMerger:
             target_conn.close()
             
             print(f"✅ Łącznie połączono: {total_merged:,} rekordów")
+            # Po połączeniu bazy forum spróbuj dociągnąć analitykę sidecar
+            try:
+                self._merge_analysis_for_forum(forum_name, offset_ids or {})
+            except Exception as e:
+                print(f"⚠️ Nie udało się złączyć analityki dla {forum_name}: {e}")
             return total_merged
             
         except sqlite3.Error as e:

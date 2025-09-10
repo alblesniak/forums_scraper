@@ -110,20 +110,29 @@ MONITORING_CONFIG = {
 # Konfiguracja LLM (OpenRouter domyślnie)
 # Domyślnie korzystamy z OpenRouter (kompatybilny klient OpenAI z base_url).
 # Można nadpisać przez LLM_PROVIDER=openai oraz OPENAI_API_KEY.
+# LLM_CONFIG = {
+#     'provider': os.environ.get('LLM_PROVIDER', 'openrouter'),
+#     'model': os.environ.get('LLM_MODEL', 'gpt-5-mini'),
+#     'temperature': float(os.environ.get('LLM_TEMPERATURE', 0.5)),
+#     'max_tokens': int(os.environ.get('LLM_MAX_TOKENS', 800)),
+#     # Klucz: preferuj OPENROUTER_API_KEY, fallback do OPENAI_API_KEY
+#     'api_key': os.environ.get('OPENROUTER_API_KEY', os.environ.get('OPENAI_API_KEY', '')),
+#     # Endpoint dla OpenRouter; dla OpenAI pozostaw puste lub nadpisz env
+#     'base_url': os.environ.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
+#     # Nagłówki identyfikujące aplikację (opcjonalne dla OpenRouter)
+#     'default_headers': {
+#         **({'HTTP-Referer': os.environ.get('OPENROUTER_HTTP_REFERER', '')} if os.environ.get('OPENROUTER_HTTP_REFERER') else {}),
+#         **({'X-Title': os.environ.get('OPENROUTER_APP_TITLE', '')} if os.environ.get('OPENROUTER_APP_TITLE') else {}),
+#     },
+# }
 LLM_CONFIG = {
-    'provider': os.environ.get('LLM_PROVIDER', 'openrouter'),
-    'model': os.environ.get('LLM_MODEL', 'gpt-5-mini'),
-    'temperature': float(os.environ.get('LLM_TEMPERATURE', 0.5)),
-    'max_tokens': int(os.environ.get('LLM_MAX_TOKENS', 800)),
-    # Klucz: preferuj OPENROUTER_API_KEY, fallback do OPENAI_API_KEY
-    'api_key': os.environ.get('OPENROUTER_API_KEY', os.environ.get('OPENAI_API_KEY', '')),
-    # Endpoint dla OpenRouter; dla OpenAI pozostaw puste lub nadpisz env
-    'base_url': os.environ.get('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1'),
-    # Nagłówki identyfikujące aplikację (opcjonalne dla OpenRouter)
-    'default_headers': {
-        **({'HTTP-Referer': os.environ.get('OPENROUTER_HTTP_REFERER', '')} if os.environ.get('OPENROUTER_HTTP_REFERER') else {}),
-        **({'X-Title': os.environ.get('OPENROUTER_APP_TITLE', '')} if os.environ.get('OPENROUTER_APP_TITLE') else {}),
-    },
+    'provider': 'openai',
+    'model': 'gpt-5-mini',
+    'temperature': 0.5,
+    'max_tokens': 800,
+    'api_key': os.environ.get('OPENAI_API_KEY', ''),
+    'base_url': 'https://api.openai.com/v1',
+    'default_headers': None,
 }
 
 def get_config():

@@ -58,7 +58,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "genders": ["M", "K"],
         "output_dir": str(ROOT_DIR / "data/topics"),
         "combine_forums": False,
-        "combined_forum_names": ["radio_katolik", "dolina_modlitwy"]
+        "combined_forum_names": ["radio_katolik", "dolina_modlitwy"],
+        "repeats": 1,
     },
     "gender": {
         # Nadpisywalne parametry reguł predykcji płci
@@ -339,23 +340,52 @@ def step_topics(config: Dict[str, Any]) -> None:
         else:
             resolved_combined = FORUMS
 
+    repeats = int(config["topics"].get("repeats", 1) or 1)
     if combine_forums and resolved_combined:
         for gender in GENDERS:
-            print(f"\n=== Top2Vec (łączone fora): {resolved_combined} / {gender} ===")
-            try:
-                analyzer.run_combined_analysis(resolved_combined, gender)
-                print("✓ OK")
-            except Exception as exc:
-                print(f"✗ Błąd: {exc}")
-    else:
-        for forum in FORUMS:
-            for gender in GENDERS:
-                print(f"\n=== Top2Vec: {forum} / {gender} ===")
+            for i in range(1, repeats + 1):
+                # Losuj lub deterministycznie modyfikuj seed, jeśli nie podano --topics-seed='auto'
+                base_seed = os.environ.get("TOPIC_RANDOM_SEED")
+                if base_seed is not None and str(base_seed).lower() not in ("auto", "random"):
+                    try:
+                        os.environ["TOPIC_RANDOM_SEED"] = str(int(base_seed) + i - 1)
+                    except Exception:
+                        pass
+                else:
+                    # auto/random – ustaw losowy seed
+                    seed = secrets.randbelow(2**31 - 1) or 1
+                    os.environ["TOPIC_RANDOM_SEED"] = str(seed)
+                    print(f"[topics] Powtórzenie {i}/{repeats}: losowe random_seed={seed}")
+
+                print(f"\n=== Top2Vec (łączone fora): {resolved_combined} / {gender} / run #{i} ===")
                 try:
-                    analyzer.run_analysis(forum, gender)
+                    analyzer.random_seed = int(os.environ.get("TOPIC_RANDOM_SEED", analyzer.random_seed))
+                    analyzer.run_combined_analysis(resolved_combined, gender)
                     print("✓ OK")
                 except Exception as exc:
                     print(f"✗ Błąd: {exc}")
+    else:
+        for forum in FORUMS:
+            for gender in GENDERS:
+                for i in range(1, repeats + 1):
+                    base_seed = os.environ.get("TOPIC_RANDOM_SEED")
+                    if base_seed is not None and str(base_seed).lower() not in ("auto", "random"):
+                        try:
+                            os.environ["TOPIC_RANDOM_SEED"] = str(int(base_seed) + i - 1)
+                        except Exception:
+                            pass
+                    else:
+                        seed = secrets.randbelow(2**31 - 1) or 1
+                        os.environ["TOPIC_RANDOM_SEED"] = str(seed)
+                        print(f"[topics] Powtórzenie {i}/{repeats}: losowe random_seed={seed}")
+
+                    print(f"\n=== Top2Vec: {forum} / {gender} / run #{i} ===")
+                    try:
+                        analyzer.random_seed = int(os.environ.get("TOPIC_RANDOM_SEED", analyzer.random_seed))
+                        analyzer.run_analysis(forum, gender)
+                        print("✓ OK")
+                    except Exception as exc:
+                        print(f"✗ Błąd: {exc}")
 
 
 def step_clean(config: Dict[str, Any], hard: bool = False) -> None:
@@ -381,6 +411,7 @@ def step_clean(config: Dict[str, Any], hard: bool = False) -> None:
             TOPIC_DIR / "models",
             TOPIC_DIR / "results",
             TOPIC_DIR / "logs",
+            TOPIC_DIR / "runs",
         ]:
             try:
                 shutil.rmtree(rel, ignore_errors=True)
@@ -443,10 +474,13 @@ Przykłady:
     )
 
     parser.add_argument("command", choices=[
-        "scrape", "merge", "analyze", "gender", "gender-all", "topics", "examples", "llm-batch", "clean", "all"
+        "scrape", "merge", "analyze", "gender", "gender-all", "topics", "examples", "llm-batch", "domains", "domain-posts", "clean", "all"
     ])
     parser.add_argument(
         "--config", dest="config_path", help="Ścieżka do pliku JSON z konfiguracją pipeline"
+    )
+    parser.add_argument(
+        "--use-merged-as-analysis", action="store_true", help="Użyj jednej bazy: analysis=merged"
     )
     # Parametry dla predykcji płci (reguły)
     parser.add_argument("--gender-weights", help="JSON z wagami reguł (np. '{\"bylam\":4,\"no_diac\":1}')")
@@ -462,9 +496,19 @@ Przykłady:
     parser.add_argument("--topics-embedding", help="embedding_model (np. doc2vec)")
     parser.add_argument("--topics-keep-docs", choices=["true", "false"], help="Czy przechowywać dokumenty w modelu")
     parser.add_argument("--topics-excluded", help="Lista wykluczanych sekcji (przecinki)")
+    parser.add_argument("--topics-repeats", type=int, help="Liczba powtórzeń trenowania per kombinacja (domyślnie 1)")
     parser.add_argument(
         "--hard", action="store_true", help="Dla 'clean': usuń wszystkie artefakty (bazy, logi, models/results)"
     )
+
+    # Parametry dla raportu domen (content_urls)
+    parser.add_argument("--domains-forums", help="Lista forów (spider_name) rozdzielona przecinkami; domyślnie radio_katolik")
+    parser.add_argument("--domains-output", help="Katalog wyjściowy CSV dla raportu domen")
+
+    # Parametry dla eksportu postów po domenie
+    parser.add_argument("--domain", help="Domena do wyszukania w content_urls, np. spowiedz.katolik.pl")
+    parser.add_argument("--domain-forums", help="Lista forów (spider_name) dla eksportu postów; domyślnie radio_katolik")
+    parser.add_argument("--domain-output", help="Katalog wyjściowy CSV dla eksportu postów")
 
     # Parametry dla exportu przykładów z modelu
     parser.add_argument("--examples-model", help="Ścieżka do modelu Top2Vec (katalog/plik 'model')")
@@ -476,6 +520,10 @@ Przykłady:
     parser.add_argument("--llm-excel", help="Ścieżka do pliku Excel z kolumnami content i opcjonalnie post_id")
     parser.add_argument("--llm-batch-size", type=int, default=10, help="Rozmiar batcha (domyślnie 10)")
     parser.add_argument("--llm-poll", type=int, default=10, help="Interwał sprawdzania statusu batcha w sekundach (domyślnie 10)")
+    parser.add_argument("--llm-concurrency", type=int, default=1, help="Maksymalna liczba równoległych jobów Batch API (domyślnie 1)")
+    parser.add_argument("--llm-resume", help="Ścieżka do istniejącego katalogu run_dir (llm_batch_...) w celu wznowienia")
+    parser.add_argument("--llm-process-existing", action="store_true", help="Przetwórz LOKALNIE wszystkie istniejące batch_*_input.jsonl bez wyników (bez Batch API)")
+    parser.add_argument("--llm-local", action="store_true", help="Przetwarzaj LOKALNIE całe wejście (bez Batch API), realtime")
 
     return parser.parse_args()
 
@@ -483,6 +531,15 @@ Przykłady:
 def main() -> int:
     args = parse_args()
     config = load_config(args.config_path)
+
+    # Flaga: jedna baza dla źródła i analizy
+    if args.use_merged_as_analysis:
+        try:
+            merged = config["databases"]["merged"]
+            config["databases"]["analysis"] = merged
+            print("[config] Ustawiono analysis=merged (jedna baza danych)")
+        except Exception:
+            pass
 
     # Nadpisz config wg argumentów topics z CLI
     if args.topics_forums:
@@ -513,6 +570,8 @@ def main() -> int:
         config["topics"]["keep_documents_in_model"] = True if args.topics_keep_docs == "true" else False
     if args.topics_excluded:
         config["topics"]["excluded_sections"] = [s.strip() for s in args.topics_excluded.split(',') if s.strip()]
+    if args.topics_repeats is not None:
+        config["topics"]["repeats"] = max(1, int(args.topics_repeats))
 
     # Katalogi będą tworzone dopiero w krokach, które zapisują pliki
 
@@ -568,13 +627,66 @@ def main() -> int:
         print(f"✓ Zapisano przykłady: {out_path}")
         return 0
 
+    if args.command == "domains":
+        # Wykonaj raport domen z merged_forums.db
+        db_dir = Path(config["databases"]["dir"]) \
+            if os.path.isabs(config["databases"]["dir"]) \
+            else ROOT_DIR / config["databases"]["dir"]
+        database_path = str(db_dir / config["databases"]["merged"])
+
+        # Fora: CLI -> --domains-forums; domyślnie radio_katolik
+        forums_cli = (args.domains_forums or "radio_katolik").strip()
+        forums = [f.strip() for f in forums_cli.split(',') if f.strip()] if forums_cli else None
+
+        # Katalog wyjściowy
+        output_dir = args.domains_output or str(ROOT_DIR / "data/reports")
+
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        from report_content_url_domains import cli_report
+        try:
+            res = cli_report(database_path=database_path, forums=forums, output_dir=output_dir)
+            print(json.dumps(res, ensure_ascii=False))
+            return 0
+        except Exception as exc:
+            print(f"✗ Błąd w domains: {exc}")
+            return 2
+
+    if args.command == "domain-posts":
+        # Eksport postów zawierających URL-e z danej domeny
+        db_dir = Path(config["databases"]["dir"]) \
+            if os.path.isabs(config["databases"]["dir"]) \
+            else ROOT_DIR / config["databases"]["dir"]
+        database_path = str(db_dir / config["databases"]["merged"])
+
+        domain = (args.domain or "spowiedz.katolik.pl").strip()
+        forums_cli = (args.domain_forums or "radio_katolik").strip()
+        forums = [f.strip() for f in forums_cli.split(',') if f.strip()] if forums_cli else None
+        output_dir = args.domain_output or str(ROOT_DIR / "data/reports")
+
+        if str(SCRIPTS_DIR) not in sys.path:
+            sys.path.insert(0, str(SCRIPTS_DIR))
+        from export_posts_by_domain import export_posts_by_domain
+        try:
+            res = export_posts_by_domain(database_path=database_path, domain=domain, forums=forums, output_dir=output_dir, preview=5)
+            print(json.dumps(res, ensure_ascii=False))
+            return 0
+        except Exception as exc:
+            print(f"✗ Błąd w domain-posts: {exc}")
+            return 2
+
     if args.command == "llm-batch":
         # Uruchom klasyfikację LLM Batch API na podstawie Excela
         excel_path = args.llm_excel or "data/topics/results/20250821/M/ALL/185832/examples/topic_2_pi_pis_sld.xlsx"
         batch_size = int(args.llm_batch_size or 10)
         poll_interval = int(args.llm_poll or 10)
+        llm_concurrency = int(args.llm_concurrency or 1)
 
         # Import modułu po dodaniu analysis do sys.path
+        # 1) Dodaj ROOT_DIR, aby 'analysis.config' był importowalny i mógł wczytać .env z repo root
+        if str(ROOT_DIR) not in sys.path:
+            sys.path.insert(0, str(ROOT_DIR))
+        # 2) Dodaj katalog topic_modeling, aby bezpośrednio zaimportować batch_classifier
         if str(TOPIC_DIR) not in sys.path:
             sys.path.insert(0, str(TOPIC_DIR))
         try:
@@ -584,7 +696,15 @@ def main() -> int:
             return 2
 
         try:
-            result = run_batch_classification(excel_path=excel_path, batch_size=batch_size, poll_interval_s=poll_interval)
+            result = run_batch_classification(
+                excel_path=excel_path,
+                batch_size=batch_size,
+                poll_interval_s=poll_interval,
+                concurrency=llm_concurrency,
+                resume_dir=args.llm_resume,
+                local_from_inputs_only=bool(args.llm_process_existing),
+                local_all=bool(args.llm_local),
+            )
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
         except Exception as exc:

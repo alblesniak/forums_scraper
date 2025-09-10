@@ -18,6 +18,8 @@ from tokenization import TokenAnalyzer
 from gender_prediction import run_gender_rules, run_gender_rules_into_analysis
 from config import get_config
 from topic_modeling.batch_classifier import run_batch_classification
+from values import run_values_classification
+from politics import run_politics_preference_classification
 
 class AnalysisCLI:
     """Interfejs wiersza poleceń dla analizy"""
@@ -274,7 +276,26 @@ Przykłady użycia:
                        help="Rozmiar batcha (liczba postów na job Batch API)")
     parser.add_argument("--llm-interval", type=int, default=10,
                        help="Interwał pollingu statusu batcha (sekundy)")
+    # Nowy moduł: wartości (M vs K)
+    parser.add_argument("--values", action="store_true",
+                       help="Uruchom klasyfikację odwołań do wartości (K vs M)")
+    parser.add_argument("--values-k", type=str, default="data/topics/results/20250827/K/ALL/155429_038844/examples/POLITYKA_KOBIETY.xlsx",
+                       help="Ścieżka do Excela z postami kobiet (kolumna 'content')")
+    parser.add_argument("--values-m", type=str, default="data/topics/results/20250827/M/ALL/194903_560595/examples/POLITYKA_MEZCZYZNI.xlsx",
+                       help="Ścieżka do Excela z postami mężczyzn (kolumna 'content')")
+    parser.add_argument("--values-batch-size", type=int, default=10,
+                       help="Rozmiar paczki postów przekazywanej do modelu (10)")
     
+    # Nowy moduł: preferencje polityczne (M vs K)
+    parser.add_argument("--politics", action="store_true",
+                       help="Uruchom klasyfikację preferencji politycznych (partie/liderzy) dla K i M")
+    parser.add_argument("--politics-k", type=str, default="data/topics/results/20250827/K/ALL/155429_038844/examples/POLITYKA_KOBIETY.xlsx",
+                       help="Ścieżka do Excela z postami kobiet do polityki (kolumna 'content')")
+    parser.add_argument("--politics-m", type=str, default="data/topics/results/20250827/M/ALL/194903_560595/examples/POLITYKA_MEZCZYZNI.xlsx",
+                       help="Ścieżka do Excela z postami mężczyzn do polityki (kolumna 'content')")
+    parser.add_argument("--politics-batch-size", type=int, default=10,
+                       help="Rozmiar paczki postów przekazywanej do modelu (10)")
+
     # Opcje ciągłej analizy
     parser.add_argument("--interval", type=int, default=300,
                        help="Interwał dla ciągłej analizy w sekundach")
@@ -288,7 +309,7 @@ Przykłady użycia:
     args = parser.parse_args()
     
     # Sprawdź czy podano akcję
-    if not any([args.create_db, args.info, args.batch, args.all, args.continuous, args.summary, args.gender_rules, args.gender_rules_crossdb, args.llm_classify]):
+    if not any([args.create_db, args.info, args.batch, args.all, args.continuous, args.summary, args.gender_rules, args.gender_rules_crossdb, args.llm_classify, args.values, args.politics]):
         parser.print_help()
         return False
     
@@ -396,6 +417,43 @@ Przykłady użycia:
     
     if args.continuous:
         cli.run_continuous_analysis(args.interval, args.batch_size)
+
+    if args.values:
+        print("\n=== Klasyfikacja wartości (M vs K) ===")
+        try:
+            res = run_values_classification(
+                k_excel_path=args.values_k,
+                m_excel_path=args.values_m,
+                batch_size=args.values_batch_size,
+                show_progress=not args.no_progress,
+            )
+            print("Wyniki zapisane w:")
+            print(f"  run_dir: {res.get('run_dir')}")
+            print(f"  predictions: {res.get('predictions_csv')}")
+            print(f"  aggregates: {res.get('aggregates_csv')}")
+            print(f"  comparison: {res.get('comparison_csv')}")
+            print(f"  examples: {res.get('examples_csv')}")
+            print(f"  excel: {res.get('excel_out_path')}")
+        except Exception as e:
+            print(f"❌ Błąd klasyfikacji wartości: {e}")
+
+    if args.politics:
+        print("\n=== Klasyfikacja preferencji politycznych (K vs M) ===")
+        try:
+            res = run_politics_preference_classification(
+                k_excel_path=args.politics_k,
+                m_excel_path=args.politics_m,
+                batch_size=args.politics_batch_size,
+                show_progress=not args.no_progress,
+            )
+            print("Wyniki zapisane w:")
+            print(f"  run_dir: {res.get('run_dir')}")
+            print(f"  predictions: {res.get('predictions_csv')}")
+            print(f"  aggregates: {res.get('aggregates_csv')}")
+            print(f"  comparison: {res.get('comparison_csv')}")
+            print(f"  excel: {res.get('excel_out_path')}")
+        except Exception as e:
+            print(f"❌ Błąd klasyfikacji preferencji: {e}")
     
     return success
 

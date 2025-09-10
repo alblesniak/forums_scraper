@@ -1,24 +1,7 @@
 {
-  "databases": { "analysis": "merged_forums.db" },
-  "topics": {
-    "forums": ["ALL"],
-    "genders": ["M"],
-    "output_dir": "data/topics",
-    "combine_forums": true,
-    "combined_forum_names": ["ALL"],
-    "keep_documents_in_model": true,
-    "embedding_model": "doc2vec",
-    "random_seed": "auto",
-    "excluded_sections": [
-      "REGULAMIN", "Kosz", "KOSZ", "Regulamin forum", "Informacje forumowe", "Uwagi o serwisie", "Archiwum"
-    ]
-  },
-  "gender": {
-    "weights": {},
-    "thresholds": {
-      "min_total": 2,
-      "min_diff": 1,
-      "strong_single_diff": 1
-    }
+  "databases": {
+    "dir": "data/databases",
+    "merged": "merged_forums.db",
+    "analysis": "merged_forums.db"
   }
 }

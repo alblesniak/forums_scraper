@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+
+<html lang="pl">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Prezentacja</title>
+<link href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/white.css" id="theme" rel="stylesheet"/>
+<link href="css/theme/custom.css" rel="stylesheet"/>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+<section class="title-slide">
+<h2>Dlaczego w dyskursie katolickich mężczyzn dominuje Prawo i Sprawiedliwość.</h2>
+<h3>Analiza katolickich forów dyskusyjnych w perspektywie lingwistyki komputerowej (modelowania tematycznego)</h3>
+<div class="authors-list">
+<div class="author">
+<div class="name">prof. Zbigniew Pasek</div>
+<div class="affil">AGH, Wydział Humanistyczny<br/>
+<a class="email" href="mailto:pasek@agh.edu.pl">pasek@agh.edu.pl</a></div>
+</div>
+<div class="author">
+<div class="name">mgr Albert Leśniak</div>
+<div class="affil">Uniwersytet Jagielloński w Krakowie,<br/>
+                Centrum Badań Ilościowych o Polityce<br/>
+<a class="email" href="mailto:albert.lesniak@uj.edu.pl">albert.lesniak@uj.edu.pl</a></div>
+</div>
+</div>
+</section>
+
+<!-- Slajd: Dwa cele naszego wystąpienia -->
+<section data-state="presentation-goals">
+<style>
+    .slide-title {
+        font-size: clamp(16px, 2.2vw, 24px);
+        font-weight: 600;
+        text-align: center;
+        margin: 0 0 30px 0;
+        color: #2D2A26;
+    }
+    .goals-container {
+        max-width: 980px;
+        margin: 0 auto;
+    }
+    .goal-card {
+        background: rgba(255,255,255,0.96);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+        backdrop-filter: blur(1px);
+        padding: 25px;
+        font-size: clamp(14px, 1.6vw, 18px);
+        line-height: 1.6;
+        color: #333;
+    }
+    .goal-section {
+        margin-bottom: 25px;
+    }
+    .goal-section:last-child {
+        margin-bottom: 0;
+    }
+    .goal-section h3 {
+        margin: 0 0 15px 0;
+        font-size: clamp(16px, 1.8vw, 20px);
+        font-weight: 600;
+        color: #2D2A26;
+        text-align: left;
+    }
+    .goal-section p {
+        margin: 0;
+        text-align: justify;
+    }
+    .goal-number {
+        display: inline-block;
+        background: #2D2A26;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        text-align: center;
+        line-height: 24px;
+        font-size: 14px;
+        font-weight: 600;
+        margin-right: 8px;
+        vertical-align: top;
+    }
+</style>
+<h2 class="slide-title">Dwa cele naszego wystąpienia</h2>
+<div class="goals-container">
+    <div class="goal-card">
+        <div class="goal-section">
+            <h3>Rekonesans katolickich forów internetowych</h3>
+            <p><span class="goal-number">1</span>Rozpoznanie głównych tematów, które podejmują polscy wierni, kiedy rozmawiają niepublicznie, przy spełnieniu dwóch warunków:</p>
+            <p style="margin-top: 15px; padding-left: 32px;"><strong>•</strong> Oczekiwaliśmy wyraźnej deklaracji katolickiej wiary</p>
+            <p style="padding-left: 32px;"><strong>•</strong> Uczestnicy debaty pozostają anonimowi, co w naszym przekonaniu zapewniało znaczny stopień szczerości</p>
+        </div>
+        <div class="goal-section">
+            <h3>Pokazanie nowych narzędzi lingwistyki komputerowej</h3>
+            <p><span class="goal-number">2</span>Prezentacja dwóch nowych narzędzi wykorzystywanych w lingwistyce komputerowej:</p>
+            <p style="margin-top: 15px; padding-left: 32px;"><strong>•</strong> Modelowania tematycznego</p>
+            <p style="padding-left: 32px;"><strong>•</strong> AI jako nadzorowanego wykonawcę określonych procedur badawczych</p>
+        </div>
+    </div>
+</div>
+</section>
+
+<section>
+<!-- Pierwszy podslajd: Statystyki korpusu -->
+<section data-state="forum-stats">
+<style>
+    .slide-title {
+        font-size: clamp(14px, 1.8vw, 18px);
+        font-weight: 500;
+        text-align: center;
+        margin: 0 0 15px 0;
+        color: #666;
+    }
+    .forum-stats-wrapper { width: 100%; padding: 8px 0; }
+    .forum-stats {
+        border-collapse: separate;
+        border-spacing: 0;
+        margin: 0 auto;
+        width: 100%;
+        table-layout: fixed;
+        font-size: clamp(14px, 1.6vw, 20px);
+        line-height: 1.5;
+        background: rgba(255,255,255,0.96);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+        backdrop-filter: blur(1px);
+    }
+    .forum-stats tr {
+        border: none;
+    }
+    .forum-stats th, .forum-stats td {
+        padding: 8px 10px;
+        vertical-align: middle;
+    }
+    .forum-stats thead th {
+        text-align: center;
+        font-weight: 700;
+        background: linear-gradient(180deg, rgba(0,0,0,0.03), rgba(0,0,0,0.00));
+    }
+    .forum-stats td:first-child {
+        position: sticky; left: 0; background: inherit; font-weight: 600;
+        color: #0b0b0b; border-right: 1px dashed rgba(0,0,0,0.05);
+        white-space: normal; width: 26%;
+    }
+    .forum-stats .metric { text-align: left; }
+    .forum-stats .forum-col {
+        text-align: center; width: 18.5%; min-width: 0;
+        white-space: normal; word-break: break-word;
+    }
+    .forum-badge { display: flex; flex-direction: column; align-items: center; gap: 10px; justify-content: center; }
+    .forum-badge img {
+        max-height: 80px; max-width: 100%; height: auto; width: auto; border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.16); object-fit: cover;
+        transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .forum-badge a { text-decoration: none; color: inherit; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .forum-badge a:hover img { transform: translateY(-2px); box-shadow: 0 14px 36px rgba(0,0,0,0.20); }
+    .forum-badge span { font-size: clamp(14px, 1.6vw, 18px); font-weight: 700; }
+    
+    .summary-cards {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        margin-top: 30px;
+        padding: 0;
+    }
+    .summary-card {
+        flex: 1;
+        background: rgba(255,255,255,0.96);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        backdrop-filter: blur(1px);
+    }
+    .summary-card h3 {
+        margin: 0 0 10px 0;
+        font-size: clamp(14px, 1.4vw, 16px);
+        font-weight: 600;
+        color: #666;
+    }
+    .summary-card .value {
+        font-size: clamp(18px, 2.2vw, 24px);
+        font-weight: 700;
+        color: #333;
+        margin: 0;
+    }
+    </style>
+<h2 class="slide-title">Statystyki korpusu</h2>
+<div class="forum-stats-wrapper">
+    <table class="forum-stats" id="forum-stats-table">
+        <thead></thead>
+        <tbody></tbody>
+    </table>
+    
+    <div class="summary-cards" id="summary-cards">
+        <div class="summary-card">
+            <h3>Łączna liczba użytkowników</h3>
+            <p class="value" id="total-users">—</p>
+        </div>
+        <div class="summary-card">
+            <h3>Łączna liczba postów</h3>
+            <p class="value" id="total-posts">—</p>
+        </div>
+        <div class="summary-card">
+            <h3>Łączna liczba tokenów</h3>
+            <p class="value" id="total-tokens">—</p>
+        </div>
+    </div>
+    <script>
+    (function(){
+        const csvPath = 'data/forums_basic_stats.csv';
+        const FORUMS = [
+            { key: 'radio_katolik', name: 'Radio Katolik', href: 'https://dyskusje.radiokatolik.pl', screen: 'screens/radio_katolik.png' },
+            { key: 'wiara', name: 'Wiara', href: 'https://forum.wiara.pl', screen: 'screens/wiara.png' },
+            { key: 'dolina_modlitwy', name: 'Dolina Modlitwy', href: 'https://dolinamodlitwy.pl/forum/', screen: 'screens/dolina_modlitwy.png' },
+            { key: 'z_chrystusem', name: 'Z chrystusem', href: 'https://zchrystusem.pl', screen: 'screens/z_chrystusem.png' }
+        ];
+
+        function stripDiacritics(s){ return String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+        function normalizeKey(name){
+            const s = stripDiacritics(String(name).toLowerCase().trim());
+            if (!s) return '';
+            if (s.includes('radio') && s.includes('katolik')) return 'radio_katolik';
+            if (s.includes('radiokatolik')) return 'radio_katolik';
+            if (s.includes('wiara')) return 'wiara';
+            if (s.includes('dolina') && s.includes('modlitw')) return 'dolina_modlitwy';
+            if (s.includes('z') && s.includes('chrystus')) return 'z_chrystusem';
+            return s.replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+        }
+
+        function parseCSV(text){
+            const lines = text.trim().split(/\r?\n/);
+            const headers = lines.shift().split(',').map(h=>h.trim());
+            const rows = lines.map(line => line.split(',').map(v=>v.trim()));
+            return {headers, rows};
+        }
+
+        function extractYearsFromRow(obj){
+            const from = obj.year_from;
+            const to = obj.year_to;
+            if (from == null || to == null) return {from: null, to: null};
+            return { from: Number(from), to: Number(to) };
+        }
+
+        function formatInt(n){
+            if (n == null || !isFinite(n)) return '—';
+            const s = Math.round(n).toString();
+            return s.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        }
+        function formatFloat(n){
+            if (n == null || !isFinite(n)) return '—';
+            const fixed = (Math.round(n*100)/100).toFixed(2);
+            const parts = fixed.split('.');
+            const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+            return intPart + ',' + parts[1];
+        }
+
+        function build(){
+            fetch(csvPath).then(r=>r.text()).then(text => {
+                const parsed = parseCSV(text);
+                const headers = parsed.headers;
+                const rows = parsed.rows;
+
+                const dataByKey = {};
+                rows.forEach(row => {
+                    const obj = {};
+                    headers.forEach((h,i)=>{ obj[h] = row[i]; });
+                    ['posts_count','users_count','total_tokens','year_from','year_to'].forEach(k => {
+                        if (obj[k] !== undefined && obj[k] !== null && obj[k] !== '' && !isNaN(Number(obj[k]))) obj[k] = Number(obj[k]);
+                    });
+                    const key = normalizeKey(obj['forum'] || '');
+                    dataByKey[key] = obj;
+                });
+
+                const table = document.getElementById('forum-stats-table');
+                const thead = table.querySelector('thead');
+                const tbody = table.querySelector('tbody');
+
+                // Nagłówki: obraz + nazwa + link
+                const trh = document.createElement('tr');
+                const blank = document.createElement('th');
+                trh.appendChild(blank);
+                FORUMS.forEach(f => {
+                    const th = document.createElement('th'); th.className = 'forum-col';
+                    const badge = document.createElement('div'); badge.className = 'forum-badge';
+                    const a = document.createElement('a'); a.href = f.href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                    const img = document.createElement('img'); img.alt = f.name; img.src = f.screen; img.onerror = function(){ this.style.display = 'none'; };
+                    const span = document.createElement('span'); span.textContent = f.name;
+                    a.appendChild(img); a.appendChild(span);
+                    badge.appendChild(a);
+                    th.appendChild(badge);
+                    trh.appendChild(th);
+                });
+                thead.appendChild(trh);
+
+                // Specyfikacja metryk (tylko możliwe do wypełnienia z CSV)
+                const metrics = [
+                    { label: 'Użytkownicy', key: 'users_count', fmt: v => formatInt(v) },
+                    { label: 'Posty', key: 'posts_count', fmt: v => formatInt(v) },
+                    { label: 'Roczniki', key: 'years_range', compute: o => { const yrs = extractYearsFromRow(o); const from = yrs.from; const to = yrs.to || 2025; if (!from) return null; return String(from) + '-' + String(to); }, fmt: v => v }
+                ];
+
+                const anyTokens = FORUMS.some(f => {
+                    const obj = dataByKey[f.key] || dataByKey[normalizeKey(f.name)] || {};
+                    return obj.total_tokens != null && obj.total_tokens !== '' && !isNaN(Number(obj.total_tokens));
+                });
+                if (anyTokens) metrics.push({ label: 'Liczba tokenów', key: 'total_tokens', fmt: v => formatInt(v) });
+
+                metrics.forEach(spec => {
+                    const tr = document.createElement('tr');
+                    const tdLabel = document.createElement('td'); tdLabel.className = 'metric'; tdLabel.textContent = spec.label; tr.appendChild(tdLabel);
+                    FORUMS.forEach(f => {
+                        const td = document.createElement('td'); td.className = 'forum-col';
+                        const obj = dataByKey[f.key] || dataByKey[normalizeKey(f.name)] || {};
+                        let value = null;
+                        if (spec.compute) value = spec.compute(obj);
+                        else if (obj[spec.key] != null) value = obj[spec.key];
+
+                        if (value == null || value === '' || (typeof value === 'number' && !isFinite(value))) {
+                            td.textContent = '—';
+                        } else {
+                            if (spec.label === 'Roczniki' || spec.label === 'Data założenia') {
+                                td.textContent = String(value);
+                            } else if (spec.label === 'Średnia na użytkownika') {
+                                td.textContent = spec.fmt(value);
+                            } else if (spec.key === 'total_tokens' || spec.key === 'posts_count' || spec.key === 'users_count') {
+                                td.textContent = spec.fmt(Number(value));
+                            } else {
+                                td.textContent = value;
+                            }
+                        }
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+                
+                // Oblicz sumy dla kart podsumowujących
+                let totalUsers = 0, totalPosts = 0, totalTokens = 0;
+                FORUMS.forEach(f => {
+                    const obj = dataByKey[f.key] || dataByKey[normalizeKey(f.name)] || {};
+                    if (obj.users_count && isFinite(obj.users_count)) totalUsers += Number(obj.users_count);
+                    if (obj.posts_count && isFinite(obj.posts_count)) totalPosts += Number(obj.posts_count);
+                    if (obj.total_tokens && isFinite(obj.total_tokens)) totalTokens += Number(obj.total_tokens);
+                });
+                
+                document.getElementById('total-users').textContent = formatInt(totalUsers);
+                document.getElementById('total-posts').textContent = formatInt(totalPosts);
+                document.getElementById('total-tokens').textContent = formatInt(totalTokens);
+                
+            }).catch(() => {
+                const table = document.getElementById('forum-stats-table');
+                if (table) table.outerHTML = '<div style="text-align:center;color:#900">Błąd ładowania statystyk</div>';
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', build);
+    })();
+    </script>
+</div>
+</section>
+
+<!-- Drugi podslajd: Wykres postów w czasie -->
+<section data-state="yearly-posts-chart">
+<style>
+    .slide-title {
+        font-size: clamp(14px, 1.8vw, 18px);
+        font-weight: 500;
+        text-align: center;
+        margin: 0 0 15px 0;
+        color: #666;
+    }
+    .chart-container {
+        width: 100%;
+        height: 80vh;
+        margin: 0 auto;
+        background: rgba(255,255,255,0.96);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+        backdrop-filter: blur(1px);
+        padding: 10px;
+        box-sizing: border-box;
+    }
+    .chart-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #666;
+        font-size: 16px;
+    }
+</style>
+<div class="chart-container" id="yearly-posts-chart">
+    <div class="chart-loading">Ładowanie wykresu...</div>
+</div>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+(function(){
+    const csvPath = 'data/yearly_posts_stats.csv';
+    
+    function parseCSV(text) {
+        const lines = text.trim().split(/\r?\n/);
+        const headers = lines.shift().split(',').map(h => h.trim());
+        const rows = lines.map(line => line.split(',').map(v => v.trim()));
+        return {headers, rows};
+    }
+    
+    function formatNumber(num) {
+        if (num == null || num === '' || isNaN(num)) return 0;
+        return parseInt(num);
+    }
+    
+    function buildChart() {
+        fetch(csvPath)
+            .then(response => response.text())
+            .then(text => {
+                const parsed = parseCSV(text);
+                const { headers, rows } = parsed;
+                
+                // Mapowanie nazw forów na bardziej czytelne
+                const forumNames = {
+                    'wiara.pl': 'Wiara.pl',
+                    'Z Chrystusem': 'Z Chrystusem',
+                    'Dolina Modlitwy': 'Dolina Modlitwy',
+                    'radiokatolik.pl': 'Radio Katolik'
+                };
+                
+                // Kolory dla każdego forum - różne żywe kolory
+                const colors = {
+                    'wiara.pl': '#2E86AB',        // niebieski
+                    'Z Chrystusem': '#A23B72',    // różowy/fioletowy
+                    'Dolina Modlitwy': '#F18F01', // pomarańczowy
+                    'radiokatolik.pl': '#C73E1D'  // czerwony
+                };
+                
+                const years = [];
+                const traces = [];
+                
+                // Przygotowanie danych (ograniczamy do roku 2024)
+                rows.forEach(row => {
+                    if (row[0] && !isNaN(parseInt(row[0]))) {
+                        const year = parseInt(row[0]);
+                        if (year <= 2024) {
+                            years.push(year);
+                        }
+                    }
+                });
+                
+                // Tworzenie śladów dla każdego forum (pomijamy kolumnę 'avg_all')
+                const forumColumns = headers.slice(1, -1); // pomijamy 'year' i 'avg_all'
+                
+                forumColumns.forEach((forum, index) => {
+                    const values = rows
+                        .filter(row => row[0] && !isNaN(parseInt(row[0])) && parseInt(row[0]) <= 2024)
+                        .map(row => formatNumber(row[index + 1]));
+                    const displayName = forumNames[forum] || forum;
+                    
+                    traces.push({
+                        x: years,
+                        y: values,
+                        type: 'scatter',
+                        mode: 'lines+markers',
+                        name: displayName,
+                        line: {
+                            color: colors[forum] || '#666666',
+                            width: 3
+                        },
+                        marker: {
+                            size: 6,
+                            color: colors[forum] || '#666666'
+                        },
+                        hovertemplate: '<b>' + displayName + '</b><br>' +
+                                     'Rok: %{x}<br>' +
+                                     'Posty: %{y:,.0f}<br>' +
+                                     '<extra></extra>'
+                    });
+                });
+                
+                // Dodaj linię średniej (jasno-szara)
+                const avgColumnIndex = headers.indexOf('avg_all');
+                if (avgColumnIndex !== -1) {
+                    const avgValues = rows
+                        .filter(row => row[0] && !isNaN(parseInt(row[0])) && parseInt(row[0]) <= 2024)
+                        .map(row => formatNumber(row[avgColumnIndex]));
+                    traces.push({
+                        x: years,
+                        y: avgValues,
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'Średnia',
+                        line: {
+                            color: '#CCCCCC',  // jasno-szary
+                            width: 2,
+                            dash: 'dash'       // przerywana linia dla lepszego rozróżnienia
+                        },
+                        hovertemplate: '<b>Średnia</b><br>' +
+                                     'Rok: %{x}<br>' +
+                                     'Posty: %{y:,.0f}<br>' +
+                                     '<extra></extra>'
+                    });
+                }
+                
+                const layout = {
+                    title: {
+                        text: 'Liczba postów na forach katolickich w latach 2003-2024',
+                        font: {
+                            size: 18,
+                            color: '#2D2A26'
+                        },
+                        x: 0.05,
+                        xanchor: 'left'
+                    },
+                    xaxis: {
+                        title: {
+                            text: 'Rok',
+                            font: {
+                                size: 14,
+                                color: '#666666'
+                            },
+                            standoff: 20
+                        },
+                        tickfont: {
+                            size: 12,
+                            color: '#666666'
+                        },
+                        gridcolor: 'rgba(0,0,0,0.1)',
+                        showgrid: true
+                    },
+                    yaxis: {
+                        title: {
+                            text: 'Liczba postów',
+                            font: {
+                                size: 14,
+                                color: '#666666'
+                            },
+                            standoff: 20
+                        },
+                        tickfont: {
+                            size: 12,
+                            color: '#666666'
+                        },
+                        gridcolor: 'rgba(0,0,0,0.1)',
+                        showgrid: true,
+                        tickformat: ',.0f'
+                    },
+                    legend: {
+                        x: 0.02,
+                        y: 0.98,
+                        xanchor: 'left',
+                        yanchor: 'top',
+                        bgcolor: 'rgba(255,255,255,0.8)',
+                        bordercolor: 'rgba(0,0,0,0.1)',
+                        borderwidth: 1,
+                        font: {
+                            size: 12,
+                            color: '#2D2A26'
+                        }
+                    },
+                    plot_bgcolor: 'rgba(0,0,0,0)',
+                    paper_bgcolor: 'rgba(0,0,0,0)',
+                    margin: {
+                        l: 80,
+                        r: 40,
+                        t: 40,
+                        b: 80
+                    },
+                    hovermode: 'x unified'
+                };
+                
+                const config = {
+                    displayModeBar: true,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d'],
+                    responsive: true
+                };
+                
+                // Usuń element ładowania przed renderowaniem wykresu
+                const chartContainer = document.getElementById('yearly-posts-chart');
+                chartContainer.innerHTML = '';
+                
+                Plotly.newPlot('yearly-posts-chart', traces, layout, config);
+            })
+            .catch(error => {
+                console.error('Błąd ładowania danych:', error);
+                document.getElementById('yearly-posts-chart').innerHTML = 
+                    '<div class="chart-loading">Błąd ładowania danych wykresu</div>';
+            });
+    }
+    
+    document.addEventListener('DOMContentLoaded', buildChart);
+})();
+</script>
+</section>
+
+<!-- Trzeci podslajd: Predykcja płci i ewaluacja — mechanizm -->
+<section data-state="gender-prediction">
+<style>
+    .slide-title {
+        font-size: clamp(14px, 1.8vw, 18px);
+        font-weight: 500;
+        text-align: center;
+        margin: 0 0 15px 0;
+        color: #666;
+    }
+    .mechanism-card {
+        max-width: 980px;
+        margin: 0 auto;
+        background: rgba(255,255,255,0.96);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+        backdrop-filter: blur(1px);
+        padding: 18px 22px;
+        font-size: clamp(14px, 1.6vw, 20px);
+        line-height: 1.55;
+        color: #333;
+    }
+    .mechanism-card ul { margin: 0; padding-left: 22px; }
+    .mechanism-card li { margin: 6px 0; }
+</style>
+<h2 class="slide-title">Predykcja płci i ewaluacja — mechanizm</h2>
+<div class="mechanism-card">
+    <ul>
+        <li><strong>Wykrywanie markerów językowych:</strong> formy „byłam/byłem", czasowniki z końcówkami „-łam/-łem", przymiotniki po „jestem/byłam/byłem", określenia ról („mamą/tatą", „żoną/mężem") oraz frazy „moja żona/mój mąż".</li>
+        <li><strong>Agregacja sygnałów:</strong> sumowanie wag markerów ze wszystkich postów użytkownika dla K i M. Wagi: formy „byłam/byłem" i końcówki „-łam/-łem" (3 pkt), przymiotniki i role (2 pkt), frazy relacyjne (2 pkt).</li>
+        <li><strong>Decyzja:</strong> predykcja płci gdy suma ≥2 pkt i różnica ≥1 pkt między K i M, lub gdy występują mocne markery („-łam/-łem") i różnica ≥1 pkt. Brak etykiety przy słabych sygnałach.</li>
+        <li><strong>Przypisanie etykiety:</strong> nadanie użytkownikowi K lub M na podstawie wyższej sumy punktów przy spełnieniu progów pewności.</li>
+        <li><strong>Ewaluacja:</strong> porównanie przewidywanych etykiet z referencyjnymi i obliczenie metryk: accuracy, precision, recall oraz F1 (per klasa i makro).</li>
+    </ul>
+</div>
+</section>
+
+<!-- Czwarty podslajd: Wyniki ewaluacji predykcji płci -->
+<section data-state="gender-evaluation-results">
+<style>
+    .slide-title {
+        font-size: clamp(14px, 1.8vw, 18px);
+        font-weight: 500;
+        text-align: center;
+        margin: 0 0 15px 0;
+        color: #666;
+    }
+    .eval-results-card {
+        max-width: 980px;
+        margin: 0 auto;
+        background: rgba(255,255,255,0.96);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+        backdrop-filter: blur(1px);
+        padding: 18px 22px;
+        font-size: clamp(14px, 1.6vw, 20px);
+        line-height: 1.55;
+        color: #333;
+    }
+    .eval-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+        font-size: clamp(14px, 1.6vw, 18px);
+    }
+    .eval-table th, .eval-table td {
+        padding: 8px 12px;
+        text-align: center;
+        border: 1px solid rgba(0,0,0,0.1);
+    }
+    .eval-table th {
+        background: rgba(0,0,0,0.05);
+        font-weight: 600;
+    }
+    .eval-table .forum-name {
+        text-align: left;
+        font-weight: 600;
+    }
+    .summary-stats {
+        display: flex;
+        justify-content: space-around;
+        margin: 20px 0;
+        gap: 20px;
+    }
+    .stat-item {
+        text-align: center;
+        flex: 1;
+    }
+    .stat-value {
+        font-size: clamp(18px, 2.2vw, 24px);
+        font-weight: 700;
+        color: #2D2A26;
+        margin: 5px 0;
+    }
+    .stat-label {
+        font-size: clamp(12px, 1.2vw, 14px);
+        color: #666;
+    }
+</style>
+<h2 class="slide-title">Wyniki ewaluacji predykcji płci</h2>
+<div class="eval-results-card">
+    <div class="summary-stats">
+        <div class="stat-item">
+            <div class="stat-value">2,424</div>
+            <div class="stat-label">Przykładów z etykietą</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">97.57%</div>
+            <div class="stat-label">Accuracy</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">97.25%</div>
+            <div class="stat-label">F1 macro</div>
+        </div>
+    </div>
+    
+    <table class="eval-table">
+        <thead>
+            <tr>
+                <th>Forum</th>
+                <th>Przykłady</th>
+                <th>Accuracy</th>
+                <th>F1 (K)</th>
+                <th>F1 (M)</th>
+                <th>F1 macro</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="forum-name">Dolina Modlitwy</td>
+                <td>259</td>
+                <td>98.07%</td>
+                <td>97.30%</td>
+                <td>98.50%</td>
+                <td>97.90%</td>
+            </tr>
+            <tr>
+                <td class="forum-name">Radio Katolik</td>
+                <td>2,165</td>
+                <td>97.51%</td>
+                <td>96.19%</td>
+                <td>98.15%</td>
+                <td>97.17%</td>
+            </tr>
+            <tr style="background: rgba(0,0,0,0.03); font-weight: 600;">
+                <td class="forum-name">SUMA</td>
+                <td>2,424</td>
+                <td>97.57%</td>
+                <td>96.32%</td>
+                <td>98.18%</td>
+                <td>97.25%</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <p style="margin-top: 20px; font-size: clamp(12px, 1.2vw, 14px); color: #666; text-align: center;">
+        <strong>Wysoka jakość predykcji:</strong> Algorytm osiąga bardzo dobre wyniki z accuracy >97% i F1 macro >97% na wszystkich forach.
+    </p>
+</div>
+</section>
+
+<!-- Piąty podslajd: Dodatkowa procedura i statystyki korpusów -->
+<section data-state="additional-procedure-stats">
+<style>
+    .slide-title {
+        font-size: clamp(14px, 1.8vw, 18px);
+        font-weight: 500;
+        text-align: center;
+        margin: 0 0 15px 0;
+        color: #666;
+    }
+    .procedure-card {
+        max-width: 980px;
+        margin: 0 auto;
+        background: rgba(255,255,255,0.96);
+        border: 1px solid rgba(0,0,0,0.06);
+        border-radius: 16px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+        backdrop-filter: blur(1px);
+        padding: 18px 22px;
+        font-size: clamp(14px, 1.6vw, 20px);
+        line-height: 1.55;
+        color: #333;
+    }
+    .procedure-card ul { margin: 0; padding-left: 22px; }
+    .procedure-card li { margin: 6px 0; }
+    .procedure-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 20px 0;
+        font-size: clamp(13px, 1.4vw, 16px);
+    }
+    .procedure-table th, .procedure-table td {
+        border: 1px solid rgba(0,0,0,0.1);
+        padding: 6px 8px;
+        text-align: center;
+    }
+    .procedure-table th {
+        background: rgba(0,0,0,0.05);
+        font-weight: 600;
+        color: #333;
+    }
+    .procedure-table .forum-name {
+        text-align: left;
+        font-weight: 600;
+    }
+    .procedure-table tr:nth-child(even) {
+        background-color: rgba(0,0,0,0.02);
+    }
+    .procedure-table tr:last-child {
+        background-color: rgba(0,0,0,0.05);
+        font-weight: 600;
+    }
+</style>
+<h2 class="slide-title">Dodatkowa procedura i statystyki korpusów</h2>
+<div class="procedure-card">
+    <ul>
+        <li>Ograniczono posty do liczących od 25 do 1000 tokenów. W przypadku użytkowniczek posiadających więcej niż 100 takich postów algorytm losowo wybierał właśnie 100.</li>
+    </ul>
+    <p style="margin-top: 20px; text-align: center; font-weight: 600;">Wielkość poszczególnych korpusów po tej procedurze:</p>
+    <table class="procedure-table">
+        <thead>
+            <tr>
+                <th>Forum</th>
+                <th>Posty (K)</th>
+                <th>Użytkownicy (K)</th>
+                <th>Tokeny (K)</th>
+                <th>Posty (M)</th>
+                <th>Użytkownicy (M)</th>
+                <th>Tokeny (M)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="forum-name">Dolina Modlitwy</td>
+                <td>2,277</td>
+                <td>138</td>
+                <td>206,999</td>
+                <td>3,735</td>
+                <td>227</td>
+                <td>350,200</td>
+            </tr>
+            <tr>
+                <td class="forum-name">Radio Katolik</td>
+                <td>11,762</td>
+                <td>992</td>
+                <td>1,094,137</td>
+                <td>40,513</td>
+                <td>2,059</td>
+                <td>4,097,313</td>
+            </tr>
+            <tr>
+                <td class="forum-name">Wiara</td>
+                <td>36,449</td>
+                <td>3,066</td>
+                <td>3,119,122</td>
+                <td>98,631</td>
+                <td>5,704</td>
+                <td>9,582,414</td>
+            </tr>
+            <tr>
+                <td class="forum-name">Z Chrystusem</td>
+                <td>8,128</td>
+                <td>481</td>
+                <td>749,060</td>
+                <td>21,604</td>
+                <td>956</td>
+                <td>2,258,011</td>
+            </tr>
+            <tr>
+                <td class="forum-name">RAZEM</td>
+                <td>58,616</td>
+                <td>4,677</td>
+                <td>5,169,318</td>
+                <td>164,483</td>
+                <td>8,946</td>
+                <td>16,287,938</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+</section>
+
+</section>
+
+</div>
+</div>
+<script>
+(function(){
+    const slidesContainer = document.querySelector('.reveal .slides');
+
+    function createImage(src){
+        const img = document.createElement('img');
+        img.src = src;
+        img.style.maxWidth = '31%';
+        img.style.maxHeight = '40vh';
+        img.style.objectFit = 'contain';
+        img.style.margin = '0';
+        img.onerror = function(){ this.style.display = 'none'; };
+        return img;
+    }
+
+    function createRow(images){
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-around';
+        row.style.alignItems = 'center';
+        row.style.gap = '32px';
+        images.forEach(img => row.appendChild(img));
+        return row;
+    }
+
+    function createContainer(){
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '32px';
+        container.style.height = '100%';
+        container.style.justifyContent = 'flex-start';
+        container.style.padding = '20px';
+        return container;
+    }
+
+    function buildStack({ title, topicStartFirst3, topicStartSix, topicEnd, basePath }){
+        const main = document.createElement('section');
+
+        // Pierwszy podslajd: tytuł + 3 obrazy
+        const first = document.createElement('section');
+        const h = document.createElement('h2');
+        h.textContent = title;
+        h.style.marginBottom = '20px';
+        first.appendChild(h);
+        const firstRow = createRow([
+            createImage(`${basePath}${topicStartFirst3}_wordcloud.png`),
+            createImage(`${basePath}${topicStartFirst3+1}_wordcloud.png`),
+            createImage(`${basePath}${topicStartFirst3+2}_wordcloud.png`)
+        ]);
+        first.appendChild(firstRow);
+        main.appendChild(first);
+
+        // Kolejne podslajdy: po 6 obrazów (2x3)
+        for (let i = topicStartSix; i <= topicEnd; i += 6) {
+            const verticalSection = document.createElement('section');
+            const container = createContainer();
+
+            const row1 = [];
+            const row2 = [];
+            for (let j = 0; j < 3; j++) {
+                const idx1 = i + j;
+                if (idx1 <= topicEnd) row1.push(createImage(`${basePath}${idx1}_wordcloud.png`));
+                const idx2 = i + 3 + j;
+                if (idx2 <= topicEnd) row2.push(createImage(`${basePath}${idx2}_wordcloud.png`));
+            }
+            container.appendChild(createRow(row1));
+            container.appendChild(createRow(row2));
+            verticalSection.appendChild(container);
+            main.appendChild(verticalSection);
+        }
+
+        return main;
+    }
+
+    function createTop2VecSlide(description, imagePath) {
+        const slideSection = document.createElement('section');
+        slideSection.style.paddingTop = '10px';
+
+        // Wyciągnij tytuł z opisu (część przed pierwszym <br>)
+        const parts = description.split('<br>');
+        const title = parts[0].replace(/<b>|<\/b>/g, ''); // usuń tagi <b>
+        const content = parts.slice(1).join('<br>');
+
+        // Dodaj tytuł slajdu
+        const titleH2 = document.createElement('h2');
+        titleH2.style.fontSize = 'clamp(20px, 2.6vw, 28px)';
+        titleH2.style.fontWeight = '600';
+        titleH2.style.textAlign = 'center';
+        titleH2.style.margin = '0 0 15px 0';
+        titleH2.style.color = '#2D2A26';
+        titleH2.textContent = title;
+        slideSection.appendChild(titleH2);
+
+        // Dodaj opis z powiększoną czcionką
+        const descriptionP = document.createElement('p');
+        descriptionP.style.fontSize = 'clamp(14px, 1.6vw, 18px)';
+        descriptionP.style.lineHeight = '1.5em';
+        descriptionP.style.textAlign = 'left';
+        descriptionP.style.margin = '10px 8% 15px';
+        descriptionP.style.maxHeight = '22vh';
+        descriptionP.style.overflow = 'hidden';
+        descriptionP.innerHTML = content;
+        slideSection.appendChild(descriptionP);
+
+        const imageContainer = document.createElement('div');
+        imageContainer.style.display = 'flex';
+        imageContainer.style.justifyContent = 'center';
+        imageContainer.style.alignItems = 'center';
+        imageContainer.style.marginBottom = '5px';
+        imageContainer.style.height = '45vh';
+
+        const image = document.createElement('img');
+        image.src = imagePath;
+        image.style.maxWidth = '85%';
+        image.style.maxHeight = '100%';
+        image.style.objectFit = 'contain';
+        imageContainer.appendChild(image);
+        slideSection.appendChild(imageContainer);
+
+        const sourceP = document.createElement('p');
+        sourceP.style.fontSize = '0.5em';
+        sourceP.style.textAlign = 'center';
+        sourceP.style.marginTop = '15px';
+        sourceP.innerHTML = `Źródło: <a href="https://arxiv.org/abs/2008.09470" target="_blank" rel="noopener">
+            Angelov, D. (2020). Top2Vec: Distributed Representations of Topics. arXiv:2008.09470 [cs.CL].
+        </a>`;
+        slideSection.appendChild(sourceP);
+
+        return slideSection;
+    }
+
+    function loadTop2VecSlides(){
+        // Główna sekcja Top2Vec z podslajdami
+        const top2VecMainSection = document.createElement('section');
+        
+        // Pierwszy podslajd: wprowadzenie do modelowania tematycznego
+        const titleSlide = document.createElement('section');
+        titleSlide.setAttribute('data-state', 'topic-modeling-intro');
+        titleSlide.innerHTML = `
+        <style>
+            .slide-title {
+                font-size: clamp(16px, 2.0vw, 22px);
+                font-weight: 600;
+                text-align: center;
+                margin: 0 0 15px 0;
+                color: #2D2A26;
+            }
+            .topic-modeling-card {
+                max-width: 1100px;
+                margin: 0 auto;
+                background: rgba(255,255,255,0.96);
+                border: 1px solid rgba(0,0,0,0.06);
+                border-radius: 12px;
+                box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+                backdrop-filter: blur(1px);
+                padding: 18px;
+                font-size: clamp(12px, 1.4vw, 16px);
+                line-height: 1.3;
+                color: #333;
+            }
+            .topic-modeling-card h3 {
+                margin: 0 0 8px 0;
+                font-size: clamp(14px, 1.6vw, 18px);
+                font-weight: 600;
+                color: #2D2A26;
+            }
+            .topic-modeling-card p {
+                margin: 6px 0;
+                text-align: justify;
+            }
+            .topic-modeling-card ul {
+                margin: 6px 0;
+                padding-left: 18px;
+            }
+            .topic-modeling-card li {
+                margin: 4px 0;
+                text-align: justify;
+            }
+            .topic-modeling-card strong {
+                color: #2D2A26;
+            }
+            .highlight-box {
+                background: rgba(46, 134, 171, 0.1);
+                border-left: 4px solid #2E86AB;
+                padding: 12px;
+                margin: 8px 0;
+                border-radius: 0 6px 6px 0;
+            }
+        </style>
+        <h2 class="slide-title">Modelowanie tematyczne i Algorytm Top2Vec</h2>
+        <div class="topic-modeling-card">
+            <p><strong>Modelowanie tematyczne</strong> to technika uczenia maszynowego służąca do automatycznego wykrywania ukrytych tematów w dużych zbiorach tekstów. Pozwala na:</p>
+            <ul>
+                <li>Identyfikację głównych wątków tematycznych w korpusie dokumentów</li>
+                <li>Grupowanie podobnych tekstów według wspólnych tematów</li>
+                <li>Redukcję złożoności danych tekstowych do zrozumiałych kategorii</li>
+            </ul>
+            
+            <div class="highlight-box">
+                <h3>Specyfika Top2Vec</h3>
+                <p><strong>Top2Vec</strong> to nowoczesny algorytm modelowania tematycznego, który wyróżnia się:</p>
+                <ul>
+                    <li><strong>Automatyczność:</strong> nie wymaga wcześniejszego określenia liczby tematów</li>
+                    <li><strong>Semantyczność:</strong> wykorzystuje zaawansowane osadzenia wektorowe (embeddings) do lepszego zrozumienia znaczenia tekstów</li>
+                    <li><strong>Hierarchiczność:</strong> identyfikuje tematy w naturalnej hierarchii od ogólnych do szczegółowych</li>
+                    <li><strong>Jakość:</strong> generuje bardziej spójne i interpretowalне tematy niż tradycyjne metody (np. LDA)</li>
+                </ul>
+            </div>
+        </div>`;
+        top2VecMainSection.appendChild(titleSlide);
+
+        // Kolejne podslajdy: 5 kroków Top2Vec
+        const top2VecSlides = [
+            createTop2VecSlide(
+                `<b>Krok 1: Wspólne osadzanie wektorów dokumentów i słów</b><br>
+                Utworzenie wspólnych osadzonych wektorów dokumentów i słów przy użyciu Doc2Vec, Universal Sentence Encoder lub BERT Sentence Transformer. 
+                Dokumenty są umieszczane blisko innych podobnych dokumentów i blisko najbardziej wyróżniających słów.`,
+                'top2vec_images/top2vec_1.png'
+            ),
+            createTop2VecSlide(
+                `<b>Krok 2: Redukcja wymiaru wektorów dokumentów</b><br>
+                Utworzenie niższowymiarowego osadzenia wektorów dokumentów przy użyciu UMAP. 
+                Wektory dokumentów w przestrzeni wysokowymiarowej są bardzo rzadkie, redukcja wymiaru pomaga w znajdowaniu gęstych obszarów. Każdy punkt reprezentuje wektor dokumentu.`,
+                'top2vec_images/top2vec_2.png'
+            ),
+            createTop2VecSlide(
+                `<b>Krok 3: Identyfikacja gęstych obszarów dokumentów</b><br>
+                Znalezienie gęstych obszarów dokumentów przy użyciu HDBSCAN. 
+                Kolorowe obszary reprezentują gęste obszary dokumentów. Czerwone punkty są wartościami odstającymi, które nie należą do określonego klastra.`,
+                'top2vec_images/top2vec_3.png'
+            ),
+            createTop2VecSlide(
+                `<b>Krok 4: Obliczenie wektora tematu</b><br>
+                Dla każdego gęstego obszaru obliczenie centroidu wektorów dokumentów w oryginalnym wymiarze, który stanowi wektor tematu. 
+                Czerwone punkty to dokumenty odstające i nie są używane do obliczania wektora tematu. Fioletowe punkty to wektory dokumentów należące do gęstego obszaru, z którego obliczany jest wektor tematu.`,
+                'top2vec_images/top2vec_4.png'
+            ),
+            createTop2VecSlide(
+                `<b>Krok 5: Identyfikacja słów kluczowych</b><br>
+                Znalezienie n najbliższych wektorów słów względem otrzymanego wektora tematu. 
+                Najbliższe wektory słów w kolejności bliskości stają się słowami kluczowymi tematu.`,
+                'top2vec_images/top2vec_5.png'
+            )
+        ];
+
+        // Dodaj wszystkie podslajdy do głównej sekcji
+        top2VecSlides.forEach((slide) => {
+            top2VecMainSection.appendChild(slide);
+        });
+
+        // Dodaj główną sekcję do kontenera
+        slidesContainer.appendChild(top2VecMainSection);
+    }
+
+    function loadWordcloudStacks(){
+        // Kobiety: K (tematy 1..30)
+        const womenStack = buildStack({
+            title: 'Top2Vec: słowozbiory (kobiety)',
+            topicStartFirst3: 1,
+            topicStartSix: 4,
+            topicEnd: 33,
+            basePath: 'data/topics/results/visualizations/K/wordclouds/topic_'
+        });
+
+        // Mężczyźni: M (tematy 0..33)
+        const menStack = buildStack({
+            title: 'Top2Vec: słowozbiory (mężczyźni)',
+            topicStartFirst3: 0,
+            topicStartSix: 3,
+            topicEnd: 32,
+            basePath: 'data/topics/results/visualizations/M/wordclouds/topic_'
+        });
+
+        slidesContainer.appendChild(womenStack);
+        slidesContainer.appendChild(menStack);
+    }
+
+    loadTop2VecSlides();
+    loadWordcloudStacks();
+    
+    // Dodaj sekcję klasyfikacji wartości na końcu
+    function loadValuesSlides(){
+        const valuesMainSection = document.createElement('section');
+        
+        // Pierwszy podslajd: Mechanizm klasyfikacji wartości
+        const mechanismSlide = document.createElement('section');
+        mechanismSlide.setAttribute('data-state', 'values-classification-mechanism');
+        mechanismSlide.innerHTML = `
+        <style>
+            .slide-title {
+                font-size: clamp(16px, 2.2vw, 24px);
+                font-weight: 600;
+                text-align: center;
+                margin: 0 0 25px 0;
+                color: #2D2A26;
+            }
+        .values-mechanism-card {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.96);
+            border: 1px solid rgba(0,0,0,0.06);
+            border-radius: 16px;
+            box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+            backdrop-filter: blur(1px);
+            padding: 20px;
+            font-size: clamp(12px, 1.4vw, 16px);
+            line-height: 1.5;
+            color: #333;
+        }
+        .values-mechanism-card ul { margin: 0; padding-left: 20px; }
+        .values-mechanism-card li { margin: 6px 0; }
+            .values-mechanism-card strong { color: #2D2A26; }
+        </style>
+        <h2 class="slide-title">Mechanizm klasyfikacji wartości przy użyciu AI</h2>
+        <div class="values-mechanism-card">
+            <ul>
+                <li><strong>Korpus wejściowy:</strong> posty użytkowników podzielone na płcie (K i M) z plików Excel, przetwarzane w batchach po 10 postów</li>
+                <li><strong>Prompt systemowy:</strong> AI działa jako „rzetelny annotator treści forum" z instrukcją ignorowania płci i skupienia się wyłącznie na odwołaniach do wartości</li>
+                <li><strong>Taksonomia wartości:</strong> 13 predefiniowanych kategorii wartości z precyzyjnymi definicjami i regułami decyzyjnymi</li>
+                <li><strong>Proces klasyfikacji:</strong> dla każdego posta AI identyfikuje obecne wartości, określa polaryzację (support/oppose/neutral), przypisuje confidence i podaje evidence_span</li>
+                <li><strong>Walidacja i agregacja:</strong> wyniki normalizowane na 1000 słów, agregowane per płeć, z porównaniem różnic (M-K) i raportami w formacie Excel</li>
+                <li><strong>Zasada wysokiej pewności:</strong> „Nie zgaduj. Jeśli nie masz wysokiej pewności — nie przypisuj żadnej wartości"</li>
+                <li><strong>Ogólne reguły decyzyjne:</strong>
+                    <ul style="margin: 3px 0 0 0; padding-left: 18px; font-size: clamp(11px, 1.3vw, 15px);">
+                        <li style="margin: 3px 0;">jawna norma/ocena: wartość przypisz tylko przy jawnej normie/ocenie lub apelu (nie samo słowo-klucz bez znaczenia normatywnego)</li>
+                        <li style="margin: 3px 0;">konflikty kategorii: jeśli zdanie spełnia 2+ definicji i masz mocne sygnały dla każdej — przypisz wieloetykietowo</li>
+                        <li style="margin: 3px 0;">niepewne przypadki: ustaw is_present=false i nie wymuszaj etykiety</li>
+                        <li style="margin: 3px 0;">polaryzacja: support (broni wartość), oppose (krytykuje ją), neutral (odwołuje się opisowo)</li>
+                    </ul>
+                </li>
+            </ul>
+        </div>`;
+        valuesMainSection.appendChild(mechanismSlide);
+
+        // Drugi podslajd: Taksonomia wartości
+        const taxonomySlide = document.createElement('section');
+        taxonomySlide.setAttribute('data-state', 'values-taxonomy');
+        taxonomySlide.innerHTML = `
+        <style>
+            .slide-title {
+                font-size: clamp(16px, 2.2vw, 24px);
+                font-weight: 600;
+                text-align: center;
+                margin: 0 0 20px 0;
+                color: #2D2A26;
+            }
+            .taxonomy-container {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            .taxonomy-card {
+                background: rgba(255,255,255,0.96);
+                border: 1px solid rgba(0,0,0,0.06);
+                border-radius: 12px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+                backdrop-filter: blur(1px);
+                padding: 18px;
+                font-size: clamp(12px, 1.3vw, 15px);
+                line-height: 1.5;
+                color: #333;
+            }
+            .taxonomy-card ul { margin: 0; padding-left: 18px; list-style-type: none; }
+            .taxonomy-card li { margin: 4px 0; }
+            .taxonomy-card .value-name { font-weight: 600; color: #2D2A26; }
+            .taxonomy-card .value-desc { color: #555; }
+        </style>
+        <h2 class="slide-title">Taksonomia 13 wartości</h2>
+        <div class="taxonomy-container">
+            <div class="taxonomy-card">
+                <ul>
+                    <li><span class="value-name">1. Sprawiedliwość/Prawo</span><br><span class="value-desc">odwołania do <strong>legalności, konstytucji, praworządności, sądów, wyroków, równości wobec prawa</strong>. Nie myl z nazwą partii „PiS" – to nie jest odwołanie do wartości per se.</span></li>
+                    <li><span class="value-name">2. Prawda/Rozum/Nauka</span><br><span class="value-desc">apel do <strong>faktów, dowodów, logiki, badań, rzetelnej wiedzy</strong>.</span></li>
+                    <li><span class="value-name">3. Wspólnota/Naród/Patriotyzm</span><br><span class="value-desc">dobro <strong>Ojczyzny, narodu, solidarność, suwerenność, patriotyzm</strong>.</span></li>
+                    <li><span class="value-name">4. Rodzina/Małżeństwo/Dzieci</span><br><span class="value-desc">normy i dobro <strong>rodziny, małżeństwa, rodziców, dzieci</strong> (wychowanie, dzietność).</span></li>
+                    <li><span class="value-name">5. Bezpieczeństwo/Ład/Porządek</span><br><span class="value-desc"><strong>bezpieczeństwo wewn./zewn., porządek, ochrona, granice, stabilność</strong>.</span></li>
+                    <li><span class="value-name">6. Wiara/Bóg (religijność)</span><br><span class="value-desc">jawne odniesienia do <strong>Boga, wiary, sakramentów, grzechu</strong> jako kategorii religijnej.</span></li>
+                    <li><span class="value-name">7. Miłosierdzie/Współczucie/Pomoc</span><br><span class="value-desc">troska o <strong>słabszych/ubogich/chorych, apel o pomoc, empatię</strong>.</span></li>
+                </ul>
+            </div>
+            <div class="taxonomy-card">
+                <ul>
+                    <li><span class="value-name">8. Wolność/Sumienie/Godność</span><br><span class="value-desc"><strong>wolności (słowa/sumienia), godność osoby, klauzula sumienia</strong>.</span></li>
+                    <li><span class="value-name">9. Moralność/Czystość</span><br><span class="value-desc">normatywne kategorie <strong>moralności (grzech/cnota), seksualność</strong> (aborcja, pornografia itp.).</span></li>
+                    <li><span class="value-name">10. Równość/Role płci</span><br><span class="value-desc"><strong>równe prawa, parytety</strong>, krytyka/obrona patriarchatu, seksizmu; <strong>określanie ról płci</strong>.</span></li>
+                    <li><span class="value-name">11. Tradycja/Autorytet/Posłuszeństwo</span><br><span class="value-desc">odwołanie do <strong>tradycji, nauczania/autorytetu</strong> (np. Kościoła), <strong>hierarchii, posłuszeństwa</strong>.</span></li>
+                    <li><span class="value-name">12. Godność/Szacunek/Honor</span><br><span class="value-desc">wymóg <strong>szacunku wobec osób/urzędu, honor</strong>, potępienie zniewagi/upokorzenia. <em>Uwaga: jeśli występuje razem z Wolność/Sumienie/Godność, przyznaj obie.</em></span></li>
+                    <li><span class="value-name">13. Prawo naturalne/Stworzenie</span><br><span class="value-desc">odwołanie do <strong>porządku/naturalności/stworzenia</strong> (np. „porządek natury", „prawo naturalne").</span></li>
+                </ul>
+            </div>
+        </div>`;
+        valuesMainSection.appendChild(taxonomySlide);
+
+        // Trzeci podslajd: Wykres wartości
+        const chartSlide = document.createElement('section');
+        chartSlide.setAttribute('data-background-color', '#FAFAF8');
+        chartSlide.setAttribute('data-background-iframe', 'data/topics/results/visualizations/wykres_wartosci.html');
+        chartSlide.setAttribute('data-background-interactive', '');
+        valuesMainSection.appendChild(chartSlide);
+
+        // Czwarty podslajd: Przykłady postów męskich
+        const malePostsSlide = document.createElement('section');
+        malePostsSlide.setAttribute('data-state', 'male-posts-examples');
+        malePostsSlide.innerHTML = `
+        <style>
+            .slide-title {
+                font-size: clamp(18px, 2.4vw, 26px);
+                font-weight: 600;
+                text-align: center;
+                margin: 0 0 20px 0;
+                color: #2D2A26;
+            }
+            .examples-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+            .example-card {
+                background: rgba(255,255,255,0.96);
+                border: 1px solid rgba(0,0,0,0.06);
+                border-radius: 12px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+                backdrop-filter: blur(1px);
+                padding: 20px;
+                font-size: clamp(14px, 1.6vw, 18px);
+                line-height: 1.5;
+                color: #333;
+                text-align: justify;
+            }
+            .example-card .post-id {
+                font-size: 0.8em;
+                color: #666;
+                text-align: right;
+                margin-top: 10px;
+                font-style: italic;
+            }
+        </style>
+        <h2 class="slide-title">Przykłady postów męskich</h2>
+        <div class="examples-container">
+            <div class="example-card">
+                "Do dziś nie wiem <strong>jaki pomysł na Polskę miał Jarek</strong>. Zamiast walczyć ze wszystkimi zabrakło <strong>rzeczowej, jasnej deklaracji zmian</strong>. <strong>III RP miała zniknąć, ale czym miała być IV RP?</strong> W czym miała być lepsza? I dlaczego prezes postawił na <strong>"miernych, ale wiernych"</strong> zamiast na przykład na Ujazdowskiego"
+                <div class="post-id">(ID: 1602946)</div>
+            </div>
+            <div class="example-card">
+                "<strong>Należy walczyć o zachowanie tego, co udało się już zrobić</strong>. Nie jestem zbyt szczęśliwy, że w tej walce trzeba <strong>zawiązywać sojusze z SLD</strong>, ale <strong>lepsze zwycięstwo oparte na takim sojuszu, niż pięknie wyglądająca porażka</strong>, którą mielibyśmy na pewno, gdyby nie taki parszywy sojusz."
+                <div class="post-id">(ID: 94689)</div>
+            </div>
+        </div>`;
+        valuesMainSection.appendChild(malePostsSlide);
+
+        // Piąty podslajd: Przykłady postów żeńskich
+        const femalePostsSlide = document.createElement('section');
+        femalePostsSlide.setAttribute('data-state', 'female-posts-examples');
+        femalePostsSlide.innerHTML = `
+        <style>
+            .slide-title {
+                font-size: clamp(18px, 2.4vw, 26px);
+                font-weight: 600;
+                text-align: center;
+                margin: 0 0 20px 0;
+                color: #2D2A26;
+            }
+            .examples-container {
+                max-width: 1200px;
+                margin: 0 auto;
+                display: flex;
+                flex-direction: column;
+                gap: 20px;
+            }
+            .example-card {
+                background: rgba(255,255,255,0.96);
+                border: 1px solid rgba(0,0,0,0.06);
+                border-radius: 12px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+                backdrop-filter: blur(1px);
+                padding: 20px;
+                font-size: clamp(14px, 1.6vw, 18px);
+                line-height: 1.5;
+                color: #333;
+                text-align: justify;
+            }
+            .example-card .post-id {
+                font-size: 0.8em;
+                color: #666;
+                text-align: right;
+                margin-top: 10px;
+                font-style: italic;
+            }
+        </style>
+        <h2 class="slide-title">Przykłady postów żeńskich</h2>
+        <div class="examples-container">
+            <div class="example-card">
+                "owszem Tusk gada czasami głupoty jak Kaczyński. I nie ukrywam, że gdyby Kaczyński łaskawie mi wybaczał, że <strong>głosowałam na PO</strong> i pocieszał, że mogę to naprawić to <strong>"sprzedałabym mu masaż nożny w zadek"</strong>. Ale słowa to nie wszystko, jednak jak na razie <strong>w uczciwości politycznej Tusk bije Kaczyńskiego na głowę</strong>. Może zmienię zdanie jak zobaczę Tuska w akcji. <strong>Puki co znam Kaczyńskiego w akcji, i ja mówię PAS</strong>."
+                <div class="post-id">(ID: 138969)</div>
+            </div>
+            <div class="example-card">
+                "Moim zdaniem <strong>Jakubiak jest najcenniejszym politykiem PiS</strong>. Sprawia wrażenie osoby <strong>uczciwej, odpowiedzialnej, rozsądnej, wiernej swoim zasadom</strong>. Życiorys ma bez zarzutu, żadnej afery, <strong>żadnej plamy na honorze</strong>, przy sporym doświadczeniu i znaczących sukcesach w polityce. (...) <strong>Jest młoda, ładna, ma miły uśmiech, ujmujący sposób bycia i jest kobietą</strong> – to też może być atut. (...) <strong>A w tle trójka dzieci i mąż – przykładna, katolicka (mam nadzieję?) rodzina</strong>. Trudno sobie wyobrazić lepszy wizerunek dla lidera chrześcijańskiej partii prawicowej."
+                <div class="post-id">(ID: 707622)</div>
+            </div>
+        </div>`;
+        valuesMainSection.appendChild(femalePostsSlide);
+
+        // Szósty podslajd: Podsumowanie różnic
+        const summarySlide = document.createElement('section');
+        summarySlide.setAttribute('data-state', 'values-summary');
+        summarySlide.innerHTML = `
+        <style>
+            .slide-title {
+                font-size: clamp(16px, 2.2vw, 24px);
+                font-weight: 600;
+                text-align: center;
+                margin: 0 0 20px 0;
+                color: #2D2A26;
+            }
+            .summary-container {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 25px;
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            .summary-card {
+                background: rgba(255,255,255,0.96);
+                border: 1px solid rgba(0,0,0,0.06);
+                border-radius: 12px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+                backdrop-filter: blur(1px);
+                padding: 20px;
+                font-size: clamp(12px, 1.3vw, 15px);
+                line-height: 1.5;
+                color: #333;
+            }
+            .summary-card h3 {
+                margin: 0 0 15px 0;
+                font-size: clamp(14px, 1.5vw, 17px);
+                font-weight: 600;
+                color: #2D2A26;
+                text-align: center;
+            }
+            .summary-card ul { margin: 0; padding-left: 18px; }
+            .summary-card li { margin: 6px 0; }
+            .value-highlight { font-weight: 600; color: #2D2A26; }
+            .diff-value { font-size: 0.9em; color: #666; font-style: italic; }
+        </style>
+        <h2 class="slide-title">Podsumowanie: główne różnice w wartościach</h2>
+        <div class="summary-container">
+            <div class="summary-card">
+                <h3>Mocniej obecne u MĘŻCZYZN</h3>
+                <ul>
+                    <li><span class="value-highlight">Prawda/Rozum/Nauka</span><br><span class="diff-value">+0.41 na 1000 słów (różnica 69%)</span></li>
+                    <li><span class="value-highlight">Wspólnota/Naród/Patriotyzm</span><br><span class="diff-value">+0.38 na 1000 słów (różnica 60%)</span></li>
+                    <li><span class="value-highlight">Moralność/Czystość</span><br><span class="diff-value">+0.12 na 1000 słów (różnica 26%)</span></li>
+                    <li><span class="value-highlight">Wolność/Sumienie/Godność</span><br><span class="diff-value">+0.10 na 1000 słów (różnica 18%)</span></li>
+                    <li><span class="value-highlight">Bezpieczeństwo/Ład/Porządek</span><br><span class="diff-value">+0.09 na 1000 słów (różnica 30%)</span></li>
+                </ul>
+            </div>
+            <div class="summary-card">
+                <h3>Mocniej obecne u KOBIET</h3>
+                <ul>
+                    <li><span class="value-highlight">Wiara/Bóg (religijność)</span><br><span class="diff-value">+0.12 na 1000 słów (różnica 17%)</span></li>
+                    <li><span class="value-highlight">Miłosierdzie/Współczucie/Pomoc</span><br><span class="diff-value">+0.11 na 1000 słów (różnica 69%)</span></li>
+                    <li><span class="value-highlight">Godność/Szacunek/Honor</span><br><span class="diff-value">+0.09 na 1000 słów (różnica 37%)</span></li>
+                    <li><span class="value-highlight">Rodzina/Małżeństwo/Dzieci</span><br><span class="diff-value">+0.09 na 1000 słów (różnica 64%)</span></li>
+                    <li><span class="value-highlight">Tradycja/Autorytet/Posłuszeństwo</span><br><span class="diff-value">+0.03 na 1000 słów (różnica 12%)</span></li>
+                </ul>
+            </div>
+        </div>
+        <p style="text-align: center; margin-top: 20px; font-size: clamp(11px, 1.1vw, 13px); color: #666;">
+            <strong>Główny wniosek:</strong> Mężczyźni częściej odwołują się do wartości intelektualnych i wspólnotowych, 
+            kobiety do wartości duchowych, opiekuńczych i rodzinnych.
+        </p>`;
+        valuesMainSection.appendChild(summarySlide);
+
+        // Piąty podslajd: PS. Intuicje spoza przedstawionej procedury
+        const intuitionsSlide = document.createElement('section');
+        intuitionsSlide.setAttribute('data-state', 'intuitions');
+        intuitionsSlide.innerHTML = `
+        <style>
+            .slide-title {
+                font-size: clamp(16px, 2.2vw, 24px);
+                font-weight: 600;
+                text-align: center;
+                margin: 0 0 25px 0;
+                color: #2D2A26;
+            }
+            .intuitions-card {
+                max-width: 1000px;
+                margin: 0 auto;
+                background: rgba(255,255,255,0.96);
+                border: 1px solid rgba(0,0,0,0.06);
+                border-radius: 16px;
+                box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+                backdrop-filter: blur(1px);
+                padding: 25px;
+                font-size: clamp(13px, 1.5vw, 17px);
+                line-height: 1.6;
+                color: #333;
+            }
+            .intuitions-card ul { margin: 0; padding-left: 22px; }
+            .intuitions-card li { margin: 10px 0; text-align: justify; }
+            .intuitions-card strong { color: #2D2A26; }
+            .author-ref { font-style: italic; color: #666; }
+        </style>
+        <h2 class="slide-title">PS. Intuicje spoza przedstawionej procedury</h2>
+        <div class="intuitions-card">
+            <ul>
+                <li><span class="author-ref">M. Markowski „Wojny współczesnych plemion"</span> – pisząc o aksjologii prawicy przypomina o silnych związkach z narodową tradycją, dbałości o tożsamość związaną z własną religią</li>
+                <li>Czas zagrożenia (imigracja, wojna) jest katalizatorem dla instytucjonalnej mobilizacji, a jej elementem jest odwołanie się do religii jako ideowego „spoiwa" społeczeństwa</li>
+                <li>Tu proces jednokierunkowy <strong>(?)</strong> (od religii do polityki), sama debata religijnych ludzi o polityce nie wymaga religijnego uzasadniania</li>
+            </ul>
+        </div>`;
+        valuesMainSection.appendChild(intuitionsSlide);
+
+        // Siódmy podslajd: Wnioski „inspirujące"
+        const conclusionsSlide = document.createElement('section');
+        conclusionsSlide.setAttribute('data-state', 'inspiring-conclusions');
+        conclusionsSlide.innerHTML = `
+        <style>
+            .slide-title {
+                font-size: clamp(18px, 2.4vw, 26px);
+                font-weight: 600;
+                text-align: center;
+                margin: 0 0 30px 0;
+                color: #2D2A26;
+            }
+            .conclusions-card {
+                max-width: 1100px;
+                margin: 0 auto;
+                background: rgba(255,255,255,0.96);
+                border: 1px solid rgba(0,0,0,0.06);
+                border-radius: 16px;
+                box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+                backdrop-filter: blur(1px);
+                padding: 30px;
+                font-size: clamp(14px, 1.6vw, 18px);
+                line-height: 1.6;
+                color: #333;
+            }
+            .conclusions-card ul {
+                list-style-type: disc;
+                padding-left: 30px;
+                margin: 20px 0;
+            }
+            .conclusions-card li {
+                margin: 15px 0;
+                text-align: left;
+            }
+            .conclusions-card strong {
+                color: #2D2A26;
+            }
+        </style>
+        <h2 class="slide-title">Wnioski „inspirujące"</h2>
+        <div class="conclusions-card">
+            <ul>
+                <li><strong>Nieobecność wymiaru religijnego w słowozbiorze „POLITYKA"</strong></li>
+                <li>Katolicy anonimowo dyskutujący w sieci o <strong>najważniejszych dla nich sprawach nie odnoszą się do sacrum i Kościoła</strong>, nie wiążą obu sfer</li>
+                <li>Czy dowodzi to <strong>„normatywnego" nie religijnego charakteru katolicyzmu w Polsce</strong>?</li>
+                <li>Czy dowodzi to <strong>desakralizacji sarmackiego (Tazbir) barokowego kompleksu Polaka-katolika</strong>?</li>
+            </ul>
+        </div>`;
+        valuesMainSection.appendChild(conclusionsSlide);
+
+        slidesContainer.appendChild(valuesMainSection);
+    }
+    
+    loadValuesSlides();
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+<script>
+      const deck = new Reveal({ hash: true, transition: 'fade' });
+      deck.initialize();
+    </script>
+</body>
+</html>

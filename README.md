@@ -391,3 +391,96 @@ python analysis/cli.py --create-db --all --summary
 
 Wszystkie artefakty trzymamy w `data/`. Katalog `analysis/topic_modeling` zawiera tylko kod (bez artefaktów).
 Więcej informacji w [dokumentacji modułu analizy](analysis/README.md).
+
+## Modelowanie tematów (Top2Vec): jedna baza, merge analityki, powtórzenia i seed
+
+### Jedna baza (analysis = merged)
+
+- Możesz trzymać WSZYSTKIE dane (posty, użytkownicy, tokeny, predykcje płci) w jednej bazie `merged_forums.db` i z niej czytać w Top2Vec.
+- Użyj przełącznika CLI, który ustawia `databases.analysis = databases.merged`:
+
+```bash
+uv run python scripts/pipeline.py topics \
+  --use-merged-as-analysis \
+  --topics-forums wiara \
+  --topics-genders K
+```
+
+Alternatywnie, ustaw w `scripts/pipeline.config.json`:
+
+```json
+{
+  "databases": {
+    "dir": "data/databases",
+    "merged": "merged_forums.db",
+    "analysis": "merged_forums.db"
+  }
+}
+```
+
+### Automatyczne dołączanie analityki do merged podczas łączenia
+
+- `scripts/merge_all_databases.py` potrafi teraz, oprócz łączenia `forum_*.db`, dociągnąć tabele analityczne z per‑forum baz `analysis_forums_<forum>.db` (o ile znajdują się w tym samym katalogu co target):
+  - `token_analysis` (z mapowaniem `post_id` zgodnie z offsetem `forum_posts.id`),
+  - `analysis_stats`,
+  - `gender_predictions` (z mapowaniem `user_id` zgodnie z offsetem `forum_users.id`).
+
+Uruchomienie:
+
+```bash
+uv run python scripts/pipeline.py merge
+# lub
+uv run python scripts/merge_all_databases.py --target data/databases/merged_forums.db
+```
+
+### Wielokrotne uruchamianie Top2Vec z auto‑seedem (powtórzenia)
+
+- Parametr `--topics-repeats N` uruchamia trenowanie N razy.
+- `--topics-seed auto` ustawia losowy seed dla każdego powtórzenia; podanie liczby zachowuje deterministyczny ciąg `base, base+1, ...`.
+
+Przykłady:
+
+```bash
+# Jedno forum (wiara), kobiety, 10 powtórzeń z losowym seedem
+uv run python scripts/pipeline.py topics \
+  --use-merged-as-analysis \
+  --topics-forums wiara \
+  --topics-genders K \
+  --topics-repeats 10 \
+  --topics-seed auto
+
+# Wszystkie fora łącznie (ALL), kobiety, 20 powtórzeń z losowym seedem
+uv run python scripts/pipeline.py topics \
+  --use-merged-as-analysis \
+  --topics-forums ALL \
+  --topics-combine --topics-combined-names ALL \
+  --topics-genders K \
+  --topics-repeats 20 \
+  --topics-seed auto
+```
+
+Wskazówki:
+
+- `--topics-forums ALL` auto‑wykrywa listę forów z tabeli `forums`.
+- `--topics-combine --topics-combined-names ALL` liczy jeden model dla wszystkich wykrytych forów.
+
+### Struktura artefaktów i zunifikowany katalog runs/
+
+Podczas `topics` generujemy spójne drzewo wyników oraz hub uruchomienia:
+
+```
+data/topics/
+├── models/<YYYYMMDD>/<GENDER>/<FORUMS>/<HHMMSS_%f>/model
+├── results/<YYYYMMDD>/<GENDER>/<FORUMS>/<HHMMSS_%f>/...
+├── logs/<YYYYMMDD>/<GENDER>/<FORUMS>/<HHMMSS_%f>/*.log
+└── runs/
+    ├── <YYYYMMDD>/<GENDER>/<FORUMS>/<HHMMSS_%f>/
+    │   ├── run.json         # metadane uruchomienia
+    │   ├── model -> .../model (symlink)
+    │   ├── results -> .../results/... (symlink)
+    │   └── logs -> .../logs/... (symlink)
+    └── latest/<GENDER>/<FORUMS> -> .../<HHMMSS_%f>/ (symlink)
+```
+
+- `runs/latest/<GENDER>/<FORUMS>/` zawsze wskazuje na najnowszy bieg tej kombinacji.
+- Eksport przykładów może wskazywać bezpośrednio na `runs/latest/.../model`.
