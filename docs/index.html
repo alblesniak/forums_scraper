@@ -15,7 +15,7 @@
 <section class="title-slide">
 <h2>Dlaczego w dyskursie katolickich mężczyzn dominuje Prawo i Sprawiedliwość.</h2>
 <h3>Analiza katolickich forów dyskusyjnych w perspektywie lingwistyki komputerowej (modelowania tematycznego)</h3>
-<div class="authors-list">
+<div class="authors-list" style="margin-top: clamp(24px, 8vh, 120px);">
 <div class="author">
 <div class="name">prof. Zbigniew Pasek</div>
 <div class="affil">AGH, Wydział Humanistyczny<br/>
@@ -26,6 +26,14 @@
 <div class="affil">Uniwersytet Jagielloński w Krakowie,<br/>
                 Centrum Badań Ilościowych o Polityce<br/>
 <a class="email" href="mailto:albert.lesniak@uj.edu.pl">albert.lesniak@uj.edu.pl</a></div>
+</div>
+</div>
+<div class="title-links" style="margin-top: clamp(16px, 5vh, 80px); text-align: left; font-size: clamp(14px, 1.8vw, 22px); color: #2D2A26; max-width: 1100px; margin-left: auto; margin-right: auto;">
+<div>
+<strong>Prezentacja:</strong> <a href="https://alblesniak.github.io/forums_scraper/" target="_blank" rel="noopener">alblesniak.github.io/forums_scraper/</a>
+</div>
+<div style="margin-top: 8px;">
+<strong>Repozytorium:</strong> <a href="https://github.com/alblesniak/forums_scraper" target="_blank" rel="noopener">github.com/alblesniak/forums_scraper</a>
 </div>
 </div>
 </section>
@@ -357,13 +365,33 @@
                 document.getElementById('total-posts').textContent = formatInt(totalPosts);
                 document.getElementById('total-tokens').textContent = formatInt(totalTokens);
                 
+                // Sygnalizuj, że dane CSV są załadowane
+                if (typeof presentationState !== 'undefined') {
+                    presentationState.csvDataLoaded = true;
+                    initializeRevealWhenReady();
+                }
+                
             }).catch(() => {
                 const table = document.getElementById('forum-stats-table');
                 if (table) table.outerHTML = '<div style="text-align:center;color:#900">Błąd ładowania statystyk</div>';
+                // Nawet w przypadku błędu, pozwól na inicjalizację
+                if (typeof presentationState !== 'undefined') {
+                    presentationState.csvDataLoaded = true;
+                    initializeRevealWhenReady();
+                }
             });
         }
 
         document.addEventListener('DOMContentLoaded', build);
+        
+        // Fallback timeout - jeśli CSV się nie załaduje w 5 sekund, kontynuuj
+        setTimeout(() => {
+            if (!presentationState.csvDataLoaded) {
+                console.warn('CSV nie załadowało się w czasie - kontynuacja bez danych');
+                presentationState.csvDataLoaded = true;
+                initializeRevealWhenReady();
+            }
+        }, 5000);
     })();
     </script>
 </div>
@@ -589,6 +617,9 @@
                 chartContainer.innerHTML = '';
                 
                 Plotly.newPlot('yearly-posts-chart', traces, layout, config);
+                
+                // Sygnalizuj, że wykres Plotly jest gotowy (ale już wcześniej sygnalizujemy plotlyLoaded)
+                console.log('Wykres Plotly wyrenderowany pomyślnie');
             })
             .catch(error => {
                 console.error('Błąd ładowania danych:', error);
@@ -1097,7 +1128,7 @@
                     <li><strong>Automatyczność:</strong> nie wymaga wcześniejszego określenia liczby tematów</li>
                     <li><strong>Semantyczność:</strong> wykorzystuje zaawansowane osadzenia wektorowe (embeddings) do lepszego zrozumienia znaczenia tekstów</li>
                     <li><strong>Hierarchiczność:</strong> identyfikuje tematy w naturalnej hierarchii od ogólnych do szczegółowych</li>
-                    <li><strong>Jakość:</strong> generuje bardziej spójne i interpretowalне tematy niż tradycyjne metody (np. LDA)</li>
+                    <li><strong>Jakość:</strong> generuje bardziej spójne i interpretowalne tematy niż tradycyjne metody (np. LDA)</li>
                 </ul>
             </div>
         </div>`;
@@ -1562,13 +1593,123 @@
     }
     
     loadValuesSlides();
+    
+    // Sygnalizuj, że wszystkie dynamiczne slajdy są załadowane
+    if (typeof presentationState !== 'undefined') {
+        presentationState.dynamicSlidesLoaded = true;
+        initializeRevealWhenReady();
+    } else {
+        // Fallback - jeśli presentationState nie istnieje, spróbuj ponownie za chwilę
+        setTimeout(() => {
+            if (typeof presentationState !== 'undefined') {
+                presentationState.dynamicSlidesLoaded = true;
+                initializeRevealWhenReady();
+            }
+        }, 100);
+    }
 })();
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
 <script>
-      const deck = new Reveal({ hash: true, transition: 'fade' });
-      deck.initialize();
-    </script>
+// Globalne zmienne do śledzenia stanu ładowania
+let presentationState = {
+    csvDataLoaded: false,
+    plotlyLoaded: false,
+    dynamicSlidesLoaded: false,
+    revealInitialized: false
+};
+
+// Funkcja inicjalizująca Reveal.js tylko gdy wszystko jest gotowe
+function initializeRevealWhenReady() {
+    if (presentationState.csvDataLoaded && 
+        presentationState.plotlyLoaded && 
+        presentationState.dynamicSlidesLoaded && 
+        !presentationState.revealInitialized) {
+        
+        console.log('Inicjalizacja Reveal.js - wszystkie komponenty gotowe');
+        const deck = new Reveal({ 
+            hash: true, 
+            transition: 'fade',
+            // Dodanie obsługi błędów
+            embedded: false,
+            keyboard: true,
+            overview: true,
+            center: true,
+            touch: true,
+            loop: false,
+            rtl: false,
+            navigationMode: 'default',
+            shuffle: false,
+            fragments: true,
+            fragmentInURL: false,
+            controls: true,
+            controlsTutorial: true,
+            controlsLayout: 'bottom-right',
+            controlsBackArrows: 'faded',
+            progress: true,
+            defaultTiming: null,
+            mouseWheel: false,
+            previewLinks: false,
+            postMessage: true,
+            postMessageEvents: false,
+            focusBodyOnPageVisibilityChange: true,
+            transition: 'fade',
+            transitionSpeed: 'default',
+            backgroundTransition: 'fade',
+            viewDistance: 3,
+            mobileViewDistance: 2,
+            display: 'block',
+            hideInactiveCursor: true,
+            hideCursorTime: 5000
+        });
+        
+        deck.initialize().then(() => {
+            console.log('Reveal.js zainicjalizowany pomyślnie');
+            presentationState.revealInitialized = true;
+        }).catch(error => {
+            console.error('Błąd inicjalizacji Reveal.js:', error);
+        });
+    }
+}
+
+// Sprawdzenie czy Plotly już się załadował
+function checkPlotlyLoaded() {
+    if (typeof Plotly !== 'undefined') {
+        presentationState.plotlyLoaded = true;
+        initializeRevealWhenReady();
+    } else {
+        // Sprawdź ponownie za 100ms
+        setTimeout(checkPlotlyLoaded, 100);
+    }
+}
+
+// Rozpocznij sprawdzanie Plotly
+checkPlotlyLoaded();
+
+// Globalny fallback - jeśli nic się nie dzieje przez 10 sekund, wymuszaj inicjalizację
+setTimeout(() => {
+    if (!presentationState.revealInitialized) {
+        console.warn('Wymuś inicjalizację Reveal.js po timeout');
+        // Oznacz wszystkie komponenty jako gotowe
+        presentationState.csvDataLoaded = true;
+        presentationState.plotlyLoaded = true;
+        presentationState.dynamicSlidesLoaded = true;
+        initializeRevealWhenReady();
+    }
+}, 10000);
+
+// Dodatkowy fallback - sprawdź czy DOM jest gotowy
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM załadowany');
+    // Sprawdź po krótkim opóźnieniu czy wszystko działa
+    setTimeout(() => {
+        if (!presentationState.revealInitialized) {
+            console.log('Próba inicjalizacji po załadowaniu DOM');
+            initializeRevealWhenReady();
+        }
+    }, 2000);
+});
+</script>
 </body>
 </html>
