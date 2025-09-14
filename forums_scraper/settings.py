@@ -34,18 +34,18 @@ RANDOMIZE_DOWNLOAD_DELAY = True
 COOKIES_ENABLED = True
 
 # Wyłącz niepotrzebne middleware dla szybszego scrapowania
-DOWNLOADER_MIDDLEWARES = {
-    'scrapy.downloadermiddlewares.robotstxt.RobotsTxtMiddleware': None,
-    'scrapy.downloadermiddlewares.httpauth.HttpAuthMiddleware': None,
-    'scrapy.downloadermiddlewares.defaultheaders.DefaultHeadersMiddleware': None,
-    'scrapy.downloadermiddlewares.redirect.MetaRefreshMiddleware': None,
-    'scrapy.downloadermiddlewares.retry.RetryMiddleware': None,
-    # Włączamy kompresję HTTP dla lepszej wydajności
-    'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware': 810,
-    'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': None,
-    # Custom retry middleware dla lepszego zarządzania timeoutami
-    'forums_scraper.middlewares.CustomRetryMiddleware': 550,
-}
+#DOWNLOADER_MIDDLEWARES = {
+#    'scrapy.downloadermiddlewares.robotstxt.RobotsTxtMiddleware': None,
+#    'scrapy.downloadermiddlewares.httpauth.HttpAuthMiddleware': None,
+#    'scrapy.downloadermiddlewares.defaultheaders.DefaultHeadersMiddleware': None,
+#    'scrapy.downloadermiddlewares.redirect.MetaRefreshMiddleware': None,
+#    'scrapy.downloadermiddlewares.retry.RetryMiddleware': None,
+#    # Włączamy kompresję HTTP dla lepszej wydajności
+#    'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware': 810,
+#    'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': None,
+#    # Custom retry middleware dla lepszego zarządzania timeoutami
+#    'forums_scraper.middlewares.CustomRetryMiddleware': 550,
+#}
 
 # Disable Telnet Console (enabled by default)
 #TELNETCONSOLE_ENABLED = False
