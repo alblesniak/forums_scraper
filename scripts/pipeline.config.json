@@ -1,7 +1,0 @@
-{
-  "databases": {
-    "dir": "data/databases",
-    "merged": "merged_forums.db",
-    "analysis": "merged_forums.db"
-  }
-}

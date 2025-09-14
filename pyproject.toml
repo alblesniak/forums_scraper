@@ -1,34 +1,29 @@
 [project]
 name = "forums-scraper"
 version = "0.1.0"
-description = "Aplikacja do scrapowania forów religijnych zbudowana w Scrapy"
+description = "Uniwersalny scraper forów z opcjonalnymi analizami per-post (online/offline)"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "matplotlib>=3.10.5",
-    "plotly>=6.3.0",
-    "psutil>=7.0.0",
-    "scrapy>=2.13.3",
-    "seaborn>=0.13.2",
-    "spacy>=3.8.7",
-    "tensorflow>=2.19.1",
-    "tensorflow-hub>=0.16.1",
-    "tensorflow-text>=2.19.0",
-    "top2vec",
-    "tqdm>=4.67.1",
-    "wordcloud>=1.9.4",
-    "openai>=1.44.0",
-    "openpyxl>=3.1.5",
-    "python-dotenv>=1.0.1",
-    "python-pptx>=1.0.2",
+requires-python = ">=3.10"
+authors = [
+  { name = "alb" }
 ]
 
-[project.scripts]
-run-scrapers = "scripts.run_all_scrapers_final:main"
-test-scraper = "scripts.test_single_scraper:main"
-merge-databases = "scripts.merge_all_databases:main"
-token-analysis = "analysis.cli:main"
-topic-model-summary = "analysis.topic_modeling.model_summary:main"
+dependencies = []
 
-[tool.uv.sources]
-top2vec = { git = "https://github.com/alblesniak/Top2Vec.git" }
+[project.optional-dependencies]
+cli = ["typer>=0.12"]
+analyzers-basic = ["tiktoken>=0.7"]
+http = ["httpx>=0.27"]
+yaml = ["pyyaml>=6.0"]
+toml = ["tomli>=2.0; python_version < '3.11'"]
+
+[project.entry-points."forums_scraper.analyzers"]
+token_count = "forums_scraper.analyzers_basic.tokenizer:TokenCountAnalyzer"
+
+[project.scripts]
+fs-cli = "forums_scraper.fs_cli.main:run"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+

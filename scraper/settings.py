@@ -7,10 +7,10 @@
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
-BOT_NAME = "scraper"
+BOT_NAME = "forums_scraper"
 
-SPIDER_MODULES = ["scraper.spiders"]
-NEWSPIDER_MODULE = "scraper.spiders"
+SPIDER_MODULES = ["forums_scraper.scraper.spiders"]
+NEWSPIDER_MODULE = "forums_scraper.scraper.spiders"
 
 ADDONS = {}
 
@@ -44,7 +44,7 @@ DOWNLOADER_MIDDLEWARES = {
     'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware': 810,
     'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': None,
     # Custom retry middleware dla lepszego zarządzania timeoutami
-    'scraper.middlewares.CustomRetryMiddleware': 550,
+    'forums_scraper.scraper.middlewares.CustomRetryMiddleware': 550,
 }
 
 # Disable Telnet Console (enabled by default)
@@ -59,7 +59,7 @@ DOWNLOADER_MIDDLEWARES = {
 # Enable or disable spider middlewares
 # See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 SPIDER_MIDDLEWARES = {
-   "scraper.middlewares.ProgressMiddleware": 543,
+   "forums_scraper.scraper.middlewares.ProgressMiddleware": 543,
 }
 
 # Enable or disable downloader middlewares
@@ -77,7 +77,8 @@ SPIDER_MIDDLEWARES = {
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-   "scraper.pipelines.SQLitePipeline": 300,
+   "forums_scraper.scraper.pipelines.analysis.AnalysisPipeline": 250,
+   "forums_scraper.scraper.pipelines.SQLitePipeline": 300,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
@@ -120,3 +121,10 @@ LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
 # SQLite database settings - każdy spider będzie miał swoją dedykowaną bazę danych
 # Format: data/databases/forum_[nazwa_spidera].db
 # SQLITE_DATABASE_PATH = "data/databases/forums.db"  # Nie używane - każdy spider ma swoją bazę
+
+# Ustawienia forums-scraper
+# Ścieżka do pliku konfiguracyjnego YAML/TOML (opcjonalna)
+FS_CONFIG_PATH = "examples/forums_scraper.yaml"
+
+# Wymuś asyncio reactor dla wsparcia async pipeline
+TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
