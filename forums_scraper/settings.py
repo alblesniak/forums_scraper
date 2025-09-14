@@ -9,8 +9,8 @@
 
 BOT_NAME = "forums_scraper"
 
-SPIDER_MODULES = ["forums_scraper.scraper.spiders"]
-NEWSPIDER_MODULE = "forums_scraper.scraper.spiders"
+SPIDER_MODULES = ["forums_scraper.spiders"]
+NEWSPIDER_MODULE = "forums_scraper.spiders"
 
 ADDONS = {}
 
@@ -44,7 +44,7 @@ DOWNLOADER_MIDDLEWARES = {
     'scrapy.downloadermiddlewares.httpcompression.HttpCompressionMiddleware': 810,
     'scrapy.downloadermiddlewares.httpproxy.HttpProxyMiddleware': None,
     # Custom retry middleware dla lepszego zarządzania timeoutami
-    'forums_scraper.scraper.middlewares.CustomRetryMiddleware': 550,
+    'forums_scraper.middlewares.CustomRetryMiddleware': 550,
 }
 
 # Disable Telnet Console (enabled by default)
@@ -59,7 +59,7 @@ DOWNLOADER_MIDDLEWARES = {
 # Enable or disable spider middlewares
 # See https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 SPIDER_MIDDLEWARES = {
-   "forums_scraper.scraper.middlewares.ProgressMiddleware": 543,
+   "forums_scraper.middlewares.ProgressMiddleware": 543,
 }
 
 # Enable or disable downloader middlewares
@@ -77,8 +77,8 @@ SPIDER_MIDDLEWARES = {
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
-   "forums_scraper.scraper.pipelines.analysis.AnalysisPipeline": 250,
-   "forums_scraper.scraper.pipelines.database.SQLitePipeline": 300,
+   "forums_scraper.pipelines.analysis.AnalysisPipeline": 250,
+   "forums_scraper.pipelines.database.SQLitePipeline": 300,
 }
 
 # Enable and configure the AutoThrottle extension (disabled by default)
@@ -124,7 +124,7 @@ SQLITE_DATABASE_PATH = "data/databases/forums_unified.db"
 # Ustawienia forums-scraper
 # Ścieżka do pliku konfiguracyjnego YAML/TOML (opcjonalna)
 # CLI automatycznie generuje konfigurację w data/databases/scraper_config.yaml
-FS_CONFIG_PATH = None
+FS_CONFIG_PATH = "data/databases/scraper_config.yaml"
 
 # Wymuś asyncio reactor dla wsparcia async pipeline
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"

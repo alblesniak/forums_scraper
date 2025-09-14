@@ -1,6 +1,6 @@
 import scrapy
 from datetime import datetime
-from weeklies_scraper.items import WeeklyItem
+from items import WeeklyItem
 
 
 class GoscNiedzielnySpider(scrapy.Spider):

@@ -30,14 +30,14 @@ all = [
 ]
 
 [project.entry-points."forums_scraper.analyzers"]
-token_count = "forums_scraper.analyzers_basic.tokenizer:TokenCountAnalyzer"
-basic_tokenizer = "forums_scraper.analyzers_basic.linguistic:BasicTokenizer"
-spacy_analyzer = "forums_scraper.analyzers_basic.linguistic:SpacyAnalyzer"
-url_analyzer = "forums_scraper.analyzers_basic.url_analyzer:URLAnalyzer"
-domain_stats = "forums_scraper.analyzers_basic.url_analyzer:DomainStatsAnalyzer"
+token_count = "analyzers.tokenizer:TokenCountAnalyzer"
+basic_tokenizer = "analyzers.linguistic:BasicTokenizer"
+spacy_analyzer = "analyzers.linguistic:SpacyAnalyzer"
+url_analyzer = "analyzers.url_analyzer:URLAnalyzer"
+domain_stats = "analyzers.url_analyzer:DomainStatsAnalyzer"
 
 [project.scripts]
-fs-cli = "forums_scraper.fs_cli.main:run"
+cli = "cli.main:run"
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -3,9 +3,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from .config import AnalysisConfig, AnalyzerConfig
-from .protocol import Analyzer
-from .registry import load_analyzers
+from core.config import AnalysisConfig, AnalyzerConfig
+from core.protocol import Analyzer
+from core.registry import load_analyzers
 
 
 class AnalysisRunner:

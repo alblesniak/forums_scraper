@@ -15,7 +15,7 @@ except ImportError:
     spacy = None
     Polish = None
 
-from forums_scraper.fs_core.protocol import Analyzer
+from core.protocol import Analyzer
 
 
 @dataclass

@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+import os
 from typing import Annotated, Dict, List, Optional, Set
 
 import typer
@@ -27,7 +28,7 @@ from rich.progress import (
 from rich.table import Table
 from rich.text import Text
 
-from ..fs_core.config import AppConfig, load_config
+from core.config import AppConfig, load_config
 
 
 console = Console()
@@ -379,8 +380,14 @@ def scrape_forums(
                 # Uruchom Scrapy
                 console.print(f"▶️  Uruchamiam: [dim]{' '.join(scrapy_args)}[/dim]")
                 
+                # Uruchamiaj z rootu projektu, aby scrapy.cfg był widoczny
+                project_root = Path(__file__).resolve().parents[1]
+                env = os.environ.copy()
+                env.setdefault("SCRAPY_SETTINGS_MODULE", "forums_scraper.settings")
                 result = subprocess.run(
                     scrapy_args,
+                    cwd=str(project_root),
+                    env=env,
                     capture_output=not verbose,
                     text=True,
                     check=True
@@ -574,7 +581,7 @@ def show_status(
     
     if not database_path.exists():
         console.print(f"[yellow]Baza danych nie istnieje: {database_path}[/yellow]")
-        console.print("💡 Uruchom scrapowanie: [cyan]uv run fs-cli scrape[/cyan]")
+        console.print("💡 Uruchom scrapowanie: [cyan]uv run cli scrape[/cyan]")
         return
     
     # Podstawowe informacje o pliku

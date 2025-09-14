@@ -1,24 +1,24 @@
 import scrapy
 from datetime import datetime
-from weeklies_scraper.items import WeeklyItem
+from items import WeeklyItem
 
 
-class IdziemySpider(scrapy.Spider):
-    name = "idziemy"
-    allowed_domains = ["idziemy.pl"]
-    start_urls = ["https://idziemy.pl/wydanie-drukowane/lista/"]
+class PrzewodnikKatolickiSpider(scrapy.Spider):
+    name = "przewodnik_katolicki"
+    allowed_domains = ["przewodnik-katolicki.pl"]
+    start_urls = ["https://www.przewodnik-katolicki.pl/Archiwum"]
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.logger.info("Rozpoczęto scrapowanie Idziemy")
+        self.logger.info("Rozpoczęto scrapowanie Przewodnika Katolickiego")
 
     def start_requests(self):
         """Rozpocznij scrapowanie od strony głównej tygodnika"""
         # Najpierw zapisz informacje o tygodniku
         weekly_item = WeeklyItem()
-        weekly_item['name'] = "Idziemy"
-        weekly_item['url'] = "https://idziemy.pl"
-        weekly_item['description'] = "Tygodnik katolicki - Idziemy"
+        weekly_item['name'] = "Przewodnik Katolicki"
+        weekly_item['url'] = "https://www.przewodnik-katolicki.pl"
+        weekly_item['description'] = "Tygodnik katolicki - Przewodnik Katolicki"
         weekly_item['scraped_at'] = datetime.now()
         yield weekly_item
         

@@ -14,6 +14,7 @@ from scrapy.exceptions import DropItem
 
 
 logger = logging.getLogger(__name__)
+logger.info("🔧 SQLitePipeline: Moduł załadowany")
 
 
 class SQLitePipeline:
@@ -32,16 +33,21 @@ class SQLitePipeline:
     
     def open_spider(self, spider):
         """Inicjalizacja połączenia z bazą danych."""
+        logger.info(f"🔧 SQLitePipeline.open_spider: database_path={self.database_path}")
+        
         # Utwórz katalog jeśli nie istnieje
         Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"📁 Utworzono katalog: {Path(self.database_path).parent}")
         
         self.connection = sqlite3.connect(self.database_path)
         self.connection.row_factory = sqlite3.Row
+        logger.info(f"🔗 Połączono z bazą danych: {self.database_path}")
         
         # Utwórz tabele
         self._create_tables()
+        logger.info(f"📊 Utworzono tabele w bazie danych")
         
-        logger.info(f"Otwarto bazę danych: {self.database_path}")
+        logger.info(f"✅ SQLitePipeline: Otwarto bazę danych: {self.database_path}")
     
     def close_spider(self, spider):
         """Zamknięcie połączenia z bazą danych."""

@@ -3,7 +3,7 @@ from __future__ import annotations
 from importlib.metadata import entry_points
 from typing import Iterable, List
 
-from .protocol import Analyzer
+from core.protocol import Analyzer
 
 
 def load_analyzers(selected_names: Iterable[str]) -> List[Analyzer]:

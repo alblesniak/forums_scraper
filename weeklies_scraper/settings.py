@@ -3,8 +3,8 @@
 
 BOT_NAME = "weeklies_scraper"
 
-SPIDER_MODULES = ["weeklies_scraper.spiders"]
-NEWSPIDER_MODULE = "weeklies_scraper.spiders"
+SPIDER_MODULES = ["spiders"]
+NEWSPIDER_MODULE = "spiders"
 
 # User agent dla tygodników katolickich
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -48,17 +48,17 @@ DEFAULT_REQUEST_HEADERS = {
 
 # Middleware settings
 SPIDER_MIDDLEWARES = {
-    "weeklies_scraper.middlewares.WeekliesScraperSpiderMiddleware": 543,
+    "middlewares.WeekliesScraperSpiderMiddleware": 543,
 }
 
 DOWNLOADER_MIDDLEWARES = {
-    "weeklies_scraper.middlewares.WeekliesScraperDownloaderMiddleware": 543,
+    "middlewares.WeekliesScraperDownloaderMiddleware": 543,
 }
 
 # Item pipelines
 ITEM_PIPELINES = {
-    "weeklies_scraper.pipelines.WeekliesScraperPipeline": 300,
-    "weeklies_scraper.pipelines.SQLitePipeline": 400,
+    "pipelines.WeekliesScraperPipeline": 300,
+    "pipelines.SQLitePipeline": 400,
 }
 
 # Logging

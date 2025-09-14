@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urlparse, urljoin
 from dataclasses import dataclass
 
-from forums_scraper.fs_core.protocol import Analyzer
+from core.protocol import Analyzer
 
 
 @dataclass

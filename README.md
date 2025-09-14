@@ -1,6 +1,6 @@
-# 🕷️ Forums Scraper
+# 🕷️ Forums & Weeklies Scraper
 
-**Zaawansowany scraper forów religijnych z równoległymi analizami NLP i bazami danych SQLite**
+**Zaawansowany scraper forów religijnych i tygodników katolickich z równoległymi analizami NLP i bazami danych SQLite**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![uv](https://img.shields.io/badge/uv-enabled-red.svg)](https://docs.astral.sh/uv/)
@@ -10,14 +10,15 @@
 
 ## 🎯 Opis projektu
 
-Forums Scraper to profesjonalne narzędzie do scrapowania forów religijnych z zaawansowanymi funkcjami analizy tekstu. System został zaprojektowany z myślą o badaniach lingwistycznych, analizie sentymentu i modelowaniu tematów w kontekście dyskusji religijnych.
+Forums & Weeklies Scraper to profesjonalne narzędzie do scrapowania forów religijnych i tygodników katolickich z zaawansowanymi funkcjami analizy tekstu. System został zaprojektowany z myślą o badaniach lingwistycznych, analizie sentymentu i modelowaniu tematów w kontekście dyskursu religijnego w internecie i mediach.
 
 ### 🎯 Główne cele
 
-- **Badania naukowe**: Analiza dyskursu religijnego w internecie
+- **Badania naukowe**: Analiza dyskursu religijnego w internecie i mediach
 - **Analiza sentymentu**: Badanie nastrojów w społecznościach religijnych
-- **Modelowanie tematów**: Identyfikacja głównych tematów dyskusji
-- **Archiwizacja**: Długoterminowe przechowywanie treści forów
+- **Modelowanie tematów**: Identyfikacja głównych tematów dyskusji i publikacji
+- **Archiwizacja**: Długoterminowe przechowywanie treści forów i tygodników
+- **Analiza porównawcza**: Porównanie dyskursu między forami a tygodnikami
 
 ## ✨ Kluczowe funkcjonalności
 
@@ -31,7 +32,7 @@ Forums Scraper to profesjonalne narzędzie do scrapowania forów religijnych z z
 
 ### 🗄️ **Zaawansowana baza danych**
 
-- **Osobne bazy SQLite** dla każdego forum
+- **Wspólne bazy SQLite** - `forums_unified.db` i `weeklies_unified.db`
 - **Pełny schemat relacyjny** - fora, sekcje, wątki, użytkownicy, posty
 - **Tabele analiz** - tokeny, statystyki językowe, analiza morfosyntaktyczna, URL-e i domeny
 - **Indeksy wydajnościowe** - szybkie zapytania analityczne
@@ -41,7 +42,7 @@ Forums Scraper to profesjonalne narzędzie do scrapowania forów religijnych z z
 
 - **Rich interface** - kolorowy, interaktywny interfejs
 - **Progress tracking** - śledzenie postępu w czasie rzeczywistym
-- **Wybór forów** - elastyczna selekcja źródeł danych
+- **Wybór źródeł** - elastyczna selekcja forów i tygodników
 - **Konfiguracja analiz** - dostosowanie do potrzeb badawczych
 - **Dry-run mode** - testowanie bez wykonywania operacji
 - **Status monitoring** - przegląd stanu baz danych
@@ -53,6 +54,7 @@ Forums Scraper to profesjonalne narzędzie do scrapowania forów religijnych z z
 - **YAML/CLI configuration** - wygodna konfiguracja
 - **Asynchronous processing** - wydajne przetwarzanie równoległe
 - **Error handling** - odporna na błędy architektura
+- **Wspólny rdzeń** - `core/` używany przez wszystkie scrapery
 
 ## 🚀 Instalacja i pierwsze uruchomienie
 
@@ -62,7 +64,7 @@ Forums Scraper to profesjonalne narzędzie do scrapowania forów religijnych z z
 - **uv** - nowoczesny menedżer pakietów Python ([instalacja](https://docs.astral.sh/uv/getting-started/installation/))
 - **4GB RAM** (minimum), **8GB RAM** (zalecane dla spaCy)
 - **Połączenie internetowe** dla scrapowania
-- **~500MB** miejsca na dysku (zależnie od liczby forów)
+- **~1GB** miejsca na dysku (zależnie od liczby forów i tygodników)
 
 ### Krok 1: Instalacja uv (jeśli nie masz)
 
@@ -130,26 +132,26 @@ uv run python -m spacy download pl_core_news_lg
 
 ```bash
 # Sprawdź czy CLI działa
-uv run fs-cli --help
+uv run cli --help
 
 # Lista dostępnych forów
-uv run fs-cli list-spiders
+uv run cli list-spiders
 
 # Lista dostępnych analizatorów
-uv run fs-cli list-analyzers
+uv run cli list-analyzers
 
 # Test bez scrapowania
-uv run fs-cli scrape --forum radio_katolik --dry-run
+uv run cli scrape --forum radio_katolik --dry-run
 ```
 
 ### Krok 5: Pierwsze uruchomienie
 
 ```bash
 # Scrapuj jedno forum z podstawową analizą
-uv run fs-cli scrape --forum radio_katolik --analysis basic_tokens
+uv run cli scrape --forum radio_katolik --analysis basic_tokens
 
 # Sprawdź wyniki
-uv run fs-cli status
+uv run cli status
 ```
 
 ### Rozwiązywanie problemów instalacji
@@ -165,15 +167,15 @@ source ~/.bashrc  # lub ~/.zshrc
 uv --version
 ```
 
-#### **Błąd "fs-cli: command not found"**
+#### **Błąd "cli: command not found"**
 
 ```bash
 # Użyj uv run zamiast bezpośredniego wywołania
-uv run fs-cli --help
+uv run cli --help
 
 # Jeśli używasz venv, upewnij się że jest aktywowany
 source .venv/bin/activate
-uv run fs-cli --help
+uv run cli --help
 ```
 
 #### **Błąd "spaCy model not found"**
@@ -195,7 +197,7 @@ uv uv pip install tiktoken
 
 ```bash
 # Zmniejsz batch size dla analiz
-uv run fs-cli scrape --batch-size 25
+uv run cli scrape --batch-size 25
 ```
 
 #### **Problemy z wirtualnym środowiskiem**
@@ -223,23 +225,33 @@ uv pip install -e ".[all]"
 #### 1. **Scrapowanie wszystkich forów** (zalecane dla początkujących)
 
 ```bash
-uv run fs-cli scrape
+uv run cli scrape
 ```
 
-- Scrapuje wszystkie 4 fora
+- Scrapuje wszystkie 4 fora religijne
 - Używa podstawowej tokenizacji
 - Zapisuje do wspólnej bazy: `data/databases/forums_unified.db`
 
-#### 2. **Scrapowanie konkretnego forum**
+#### 2. **Scrapowanie tygodników katolickich**
 
 ```bash
-uv run fs-cli scrape --forum radio_katolik
+cd weeklies_scraper
+scrapy crawl gosc_niedzielny -s SQLITE_DATABASE_PATH=../data/databases/weeklies_unified.db
 ```
 
-#### 3. **Scrapowanie z analizą spaCy**
+- Scrapuje tygodniki katolickie
+- Zapisuje do wspólnej bazy: `data/databases/weeklies_unified.db`
+
+#### 3. **Scrapowanie konkretnego forum**
 
 ```bash
-uv run fs-cli scrape --forum wiara --analysis spacy_full --sentiment
+uv run cli scrape --forum radio_katolik
+```
+
+#### 4. **Scrapowanie z analizą spaCy**
+
+```bash
+uv run cli scrape --forum wiara --analysis spacy_full --sentiment
 ```
 
 ### Zaawansowane opcje
@@ -247,7 +259,7 @@ uv run fs-cli scrape --forum wiara --analysis spacy_full --sentiment
 #### **Wybór wielu forów i analiz**
 
 ```bash
-uv run fs-cli scrape \
+uv run cli scrape \
   --forum wiara \
   --forum dolina_modlitwy \
   --analysis basic_tokens \
@@ -258,7 +270,7 @@ uv run fs-cli scrape \
 #### **Optymalizacja wydajności**
 
 ```bash
-uv run fs-cli scrape \
+uv run cli scrape \
   --concurrent 32 \
   --delay 0.1 \
   --batch-size 200 \
@@ -268,7 +280,7 @@ uv run fs-cli scrape \
 #### **Tryb testowy (bez scrapowania)**
 
 ```bash
-uv run fs-cli scrape --forum wiara --analysis all --dry-run
+uv run cli scrape --forum wiara --analysis all --dry-run
 ```
 
 ### Zarządzanie danymi
@@ -276,26 +288,28 @@ uv run fs-cli scrape --forum wiara --analysis all --dry-run
 #### **Status baz danych**
 
 ```bash
-uv run fs-cli status
+uv run cli status
 ```
 
 Wyświetla:
 
-- Rozmiary plików baz danych
-- Liczba postów w każdej bazie
+- Rozmiary plików baz danych (forums_unified.db, weeklies_unified.db)
+- Liczba postów/artykułów w każdej bazie
 - Daty ostatniej modyfikacji
 
 #### **Tworzenie konfiguracji**
 
 ```bash
 # Utwórz plik konfiguracyjny
-uv run fs-cli config --analysis spacy_full --sentiment --output my_config.yaml
+uv run cli config --analysis spacy_full --sentiment --output my_config.yaml
 
 # Użyj własnej konfiguracji
-uv run fs-cli scrape --config my_config.yaml
+uv run cli scrape --config my_config.yaml
 ```
 
-## 📋 Dostępne fora
+## 📋 Dostępne źródła danych
+
+### 🕷️ Fora religijne
 
 | Forum               | Kod               | Opis                                   | Szacowana wielkość |
 | ------------------- | ----------------- | -------------------------------------- | ------------------ |
@@ -304,17 +318,29 @@ uv run fs-cli scrape --config my_config.yaml
 | **Wiara.pl**        | `wiara`           | Największe polskie forum katolickie    | ~100MB             |
 | **Z Chrystusem**    | `z_chrystusem`    | Forum ewangelickie                     | ~40MB              |
 
-### Wybór forów
+### 📰 Tygodniki katolickie
+
+| Tygodnik                 | Kod                    | Opis                                 | Szacowana wielkość |
+| ------------------------ | ---------------------- | ------------------------------------ | ------------------ |
+| **Gość Niedzielny**      | `gosc_niedzielny`      | Tygodnik katolicki - Gość Niedzielny | ~20MB              |
+| **Niedziela**            | `niedziela`            | Tygodnik katolicki - Niedziela       | ~15MB              |
+| **Przewodnik Katolicki** | `przewodnik_katolicki` | Tygodnik katolicki - Przewodnik      | ~18MB              |
+| **Idziemy**              | `idziemy`              | Tygodnik katolicki - Idziemy         | ~12MB              |
+
+### Wybór źródeł danych
 
 ```bash
-# Pojedyncze forum
+# Fora religijne
 --forum radio_katolik
-
-# Wiele forów
 --forum wiara --forum dolina_modlitwy
-
-# Wszystkie fora (domyślne)
 --forum all
+
+# Tygodniki katolickie
+cd weeklies_scraper
+scrapy crawl gosc_niedzielny -s SQLITE_DATABASE_PATH=../data/databases/weeklies_unified.db
+scrapy crawl niedziela -s SQLITE_DATABASE_PATH=../data/databases/weeklies_unified.db
+scrapy crawl przewodnik_katolicki -s SQLITE_DATABASE_PATH=../data/databases/weeklies_unified.db
+scrapy crawl idziemy -s SQLITE_DATABASE_PATH=../data/databases/weeklies_unified.db
 ```
 
 ## 🔬 Typy analiz NLP
@@ -444,16 +470,19 @@ Włącza wszystkie dostępne analizatory: tokeny + spaCy + URL-e + domeny.
 
 ## 🗄️ Struktura bazy danych
 
-**Wspólna baza SQLite:** `data/databases/forums_unified.db`
+**Wspólne bazy SQLite:**
 
-Wszystkie fora, posty i analizy są przechowywane w jednej bazie danych, co umożliwia:
+- **`data/databases/forums_unified.db`** - Wszystkie fora religijne
+- **`data/databases/weeklies_unified.db`** - Wszystkie tygodniki katolickie
 
-- **Analizy porównawcze** między forami
+Wspólne bazy danych umożliwiają:
+
+- **Analizy porównawcze** między forami i tygodnikami
 - **Łatwiejsze zapytania** SQL
 - **Prostsze zarządzanie** danymi
 - **Efektywniejsze** przechowywanie
 
-### Tabele główne
+### Tabele forów religijnych
 
 #### **forums** - Informacje o forach
 
@@ -687,6 +716,89 @@ CREATE TABLE post_ner_stats (
 );
 ```
 
+### Tabele tygodników katolickich
+
+#### **weeklies** - Informacje o tygodnikach
+
+```sql
+CREATE TABLE weeklies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    url TEXT NOT NULL,
+    description TEXT,
+    scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### **issues** - Wydania tygodników
+
+```sql
+CREATE TABLE issues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    weekly_name TEXT NOT NULL,
+    issue_name TEXT NOT NULL,
+    issue_number INTEGER NOT NULL,
+    issue_year INTEGER NOT NULL,
+    issue_date DATE,
+    issue_url TEXT NOT NULL,
+    issue_cover_url TEXT,
+    issue_description TEXT,
+    scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(weekly_name, issue_number, issue_year)
+);
+```
+
+#### **sections** - Sekcje w tygodnikach
+
+```sql
+CREATE TABLE sections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    weekly_name TEXT NOT NULL,
+    issue_number INTEGER NOT NULL,
+    issue_year INTEGER NOT NULL,
+    section_name TEXT NOT NULL,
+    section_url TEXT,
+    section_description TEXT,
+    scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(weekly_name, issue_number, issue_year, section_name)
+);
+```
+
+#### **articles** - Artykuły w tygodnikach
+
+```sql
+CREATE TABLE articles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    weekly_name TEXT NOT NULL,
+    issue_number INTEGER NOT NULL,
+    issue_year INTEGER NOT NULL,
+    section_name TEXT,
+    article_title TEXT NOT NULL,
+    article_intro TEXT,
+    article_authors TEXT,
+    article_url TEXT NOT NULL,
+    article_content TEXT,
+    article_tags TEXT,
+    article_word_count INTEGER,
+    article_image_urls TEXT,
+    scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(weekly_name, issue_number, issue_year, article_url)
+);
+```
+
+#### **authors** - Autorzy artykułów
+
+```sql
+CREATE TABLE authors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    bio TEXT,
+    photo_url TEXT,
+    social_media TEXT,
+    scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
 ## 📊 Przykłady analiz SQL
 
 ### Podstawowe statystyki
@@ -907,6 +1019,81 @@ WHERE pla.lemma IN ('bóg', 'jezus', 'chrystus', 'modlitwa', 'wiara', 'kośció�
   AND pla.is_alpha = 1
 GROUP BY f.spider_name, pla.lemma
 ORDER BY f.spider_name, frequency DESC;
+```
+
+### Analizy tygodników katolickich
+
+#### **Przegląd tygodników w bazie**
+
+```sql
+-- Statystyki tygodników
+SELECT
+    w.name as weekly,
+    COUNT(DISTINCT i.id) as issues_count,
+    COUNT(DISTINCT a.id) as articles_count,
+    COUNT(DISTINCT au.id) as authors_count,
+    MIN(i.issue_date) as first_issue,
+    MAX(i.issue_date) as last_issue
+FROM weeklies w
+LEFT JOIN issues i ON w.name = i.weekly_name
+LEFT JOIN articles a ON i.weekly_name = a.weekly_name AND i.issue_number = a.issue_number AND i.issue_year = a.issue_year
+LEFT JOIN authors au ON a.article_authors LIKE '%' || au.name || '%'
+GROUP BY w.name
+ORDER BY articles_count DESC;
+```
+
+#### **Najaktywniejsze sekcje w tygodnikach**
+
+```sql
+-- Top sekcje w tygodnikach
+SELECT
+    w.name as weekly,
+    s.section_name,
+    COUNT(a.id) as articles_count,
+    AVG(a.article_word_count) as avg_word_count
+FROM weeklies w
+JOIN issues i ON w.name = i.weekly_name
+JOIN sections s ON i.weekly_name = s.weekly_name AND i.issue_number = s.issue_number AND i.issue_year = s.issue_year
+JOIN articles a ON s.weekly_name = a.weekly_name AND s.issue_number = a.issue_number AND s.issue_year = a.issue_year
+GROUP BY w.name, s.section_name
+ORDER BY articles_count DESC
+LIMIT 20;
+```
+
+#### **Najczęściej publikujący autorzy**
+
+```sql
+-- Top autorzy w tygodnikach
+SELECT
+    au.name as author,
+    COUNT(a.id) as articles_count,
+    COUNT(DISTINCT a.weekly_name) as weeklies_count,
+    AVG(a.article_word_count) as avg_word_count,
+    MIN(a.scraped_at) as first_article,
+    MAX(a.scraped_at) as last_article
+FROM authors au
+JOIN articles a ON a.article_authors LIKE '%' || au.name || '%'
+GROUP BY au.name
+ORDER BY articles_count DESC
+LIMIT 20;
+```
+
+#### **Analiza treści artykułów**
+
+```sql
+-- Statystyki treści artykułów per tygodnik
+SELECT
+    w.name as weekly,
+    COUNT(a.id) as articles_count,
+    AVG(a.article_word_count) as avg_word_count,
+    MIN(a.article_word_count) as min_word_count,
+    MAX(a.article_word_count) as max_word_count,
+    COUNT(CASE WHEN a.article_content IS NOT NULL THEN 1 END) as articles_with_content
+FROM weeklies w
+JOIN issues i ON w.name = i.weekly_name
+JOIN articles a ON i.weekly_name = a.weekly_name AND i.issue_number = a.issue_number AND i.issue_year = a.issue_year
+GROUP BY w.name
+ORDER BY articles_count DESC;
 ```
 
 ### Analizy domen i URL-ów
@@ -1170,7 +1357,7 @@ scrapy:
 #### **Dla szybkiego scrapowania**
 
 ```bash
-uv run fs-cli scrape \
+uv run cli scrape \
   --concurrent 64 \
   --delay 0.1 \
   --analysis basic_tokens \
@@ -1180,7 +1367,7 @@ uv run fs-cli scrape \
 #### **Dla dokładnej analizy**
 
 ```bash
-uv run fs-cli scrape \
+uv run cli scrape \
   --concurrent 8 \
   --delay 1.0 \
   --batch-size 50 \
@@ -1192,7 +1379,7 @@ uv run fs-cli scrape \
 #### **Dla ograniczonych zasobów**
 
 ```bash
-uv run fs-cli scrape \
+uv run cli scrape \
   --concurrent 4 \
   --delay 2.0 \
   --batch-size 25 \
@@ -1225,27 +1412,27 @@ uv pip install tiktoken
 
 ```bash
 # Zmniejsz batch size
-uv run fs-cli scrape --batch-size 25 --analysis spacy_full
+uv run cli scrape --batch-size 25 --analysis spacy_full
 
 # Lub użyj mniejszego modelu
-uv run fs-cli scrape --spacy-model pl_core_news_lg
+uv run cli scrape --spacy-model pl_core_news_lg
 ```
 
 #### **4. Zbyt wolne scrapowanie**
 
 ```bash
 # Zwiększ równoległość (ostrożnie!)
-uv run fs-cli scrape --concurrent 32 --delay 0.2
+uv run cli scrape --concurrent 32 --delay 0.2
 
 # Wyłącz analizy dla szybszego scrapowania
-uv run fs-cli scrape --analysis none
+uv run cli scrape --analysis none
 ```
 
 #### **5. Błędy połączenia sieciowego**
 
 ```bash
 # Zwiększ opóźnienia
-uv run fs-cli scrape --delay 2.0 --concurrent 8
+uv run cli scrape --delay 2.0 --concurrent 8
 
 # Sprawdź połączenie internetowe
 ping google.com
@@ -1256,19 +1443,19 @@ ping google.com
 #### **Włącz szczegółowe logi**
 
 ```bash
-uv run fs-cli scrape --verbose --forum radio_katolik
+uv run cli scrape --verbose --forum radio_katolik
 ```
 
 #### **Testuj bez scrapowania**
 
 ```bash
-uv run fs-cli scrape --dry-run --analysis all
+uv run cli scrape --dry-run --analysis all
 ```
 
 #### **Sprawdź status baz danych**
 
 ```bash
-uv run fs-cli status
+uv run cli status
 ```
 
 ## 📊 Monitorowanie podczas scrapowania
@@ -1278,7 +1465,7 @@ uv run fs-cli status
 #### **Terminal 1: Uruchom scrapowanie**
 
 ```bash
-uv run fs-cli scrape \
+uv run cli scrape \
   --forum all \
   --analysis all \
   --sentiment \
@@ -1292,13 +1479,13 @@ uv run fs-cli scrape \
 
 ```bash
 # Odświeżaj co 10 sekund
-watch -n 10 'uv run fs-cli status'
+watch -n 10 'uv run cli status'
 
 # Lub sprawdzaj ręcznie
 while true; do
   clear
   echo "=== $(date) ==="
-  uv run fs-cli status
+  uv run cli status
   sleep 15
 done
 ```
@@ -1306,14 +1493,14 @@ done
 #### **Terminal 3: Monitoruj zasoby systemowe**
 
 ```bash
-# Monitoruj proces fs-cli
-top -pid $(pgrep -f fs-cli)
+# Monitoruj proces cli
+top -pid $(pgrep -f cli)
 
 # Lub wszystkie procesy Python
 top -o cpu -stats pid,command,cpu,mem,time | grep python
 
 # Monitoruj pamięć
-watch -n 5 'ps aux | grep fs-cli | grep -v grep'
+watch -n 5 'ps aux | grep cli | grep -v grep'
 ```
 
 #### **Terminal 4: Monitoruj rozmiar bazy**
@@ -1413,7 +1600,7 @@ du -sh data/databases/  # Rozmiar katalogu baz
 grep -i error ~/.scrapy/logs/* | tail -10
 
 # Sprawdź czy proces działa
-ps aux | grep fs-cli | grep -v grep
+ps aux | grep cli | grep -v grep
 ```
 
 ### **Przykład pełnego workflow'u monitorowania**
@@ -1422,10 +1609,10 @@ ps aux | grep fs-cli | grep -v grep
 
 ```bash
 # Sprawdź stan przed rozpoczęciem
-uv run fs-cli status
+uv run cli status
 
 # Uruchom kompleksowe scrapowanie
-uv run fs-cli scrape \
+uv run cli scrape \
   --forum all \
   --analysis all \
   --sentiment \
@@ -1447,17 +1634,18 @@ while true; do
 
   # Status bazy danych
   echo "📊 STATUS BAZY DANYCH:"
-  uv run fs-cli status
+  uv run cli status
   echo
 
   # Zasoby systemowe
   echo "💻 ZASOBY SYSTEMOWE:"
-  ps aux | grep fs-cli | grep -v grep | head -3
+  ps aux | grep cli | grep -v grep | head -3
   echo
 
-  # Rozmiar bazy
-  echo "📁 ROZMIAR BAZY:"
-  ls -lh data/databases/forums_unified.db 2>/dev/null || echo "Baza nie istnieje"
+# Rozmiar baz
+echo "📁 ROZMIAR BAZ:"
+ls -lh data/databases/forums_unified.db 2>/dev/null || echo "Baza forów nie istnieje"
+ls -lh data/databases/weeklies_unified.db 2>/dev/null || echo "Baza tygodników nie istnieje"
   echo
 
   sleep 30
@@ -1471,7 +1659,7 @@ chmod +x monitor.sh && ./monitor.sh
 
 ```bash
 # Real-time SQL monitoring
-watch -n 15 'echo "POSTĘP SCRAPOWANIA:" && sqlite3 data/databases/forums_unified.db "
+watch -n 15 'echo "POSTĘP SCRAPOWANIA FORÓW:" && sqlite3 data/databases/forums_unified.db "
 SELECT
   f.spider_name as Forum,
   COUNT(DISTINCT s.id) as Sekcje,
@@ -1484,7 +1672,21 @@ LEFT JOIN threads t ON s.id = t.section_id
 LEFT JOIN posts p ON t.id = p.thread_id
 LEFT JOIN users u ON p.user_id = u.id
 GROUP BY f.spider_name
-ORDER BY Posty DESC;" 2>/dev/null || echo "Baza nie gotowa"'
+ORDER BY Posty DESC;" 2>/dev/null || echo "Baza forów nie gotowa"'
+
+# Monitoring tygodników
+watch -n 15 'echo "POSTĘP SCRAPOWANIA TYGODNIKÓW:" && sqlite3 data/databases/weeklies_unified.db "
+SELECT
+  w.name as Tygodnik,
+  COUNT(DISTINCT i.id) as Wydania,
+  COUNT(DISTINCT a.id) as Artykuły,
+  COUNT(DISTINCT au.id) as Autorzy
+FROM weeklies w
+LEFT JOIN issues i ON w.name = i.weekly_name
+LEFT JOIN articles a ON i.weekly_name = a.weekly_name AND i.issue_number = a.issue_number AND i.issue_year = a.issue_year
+LEFT JOIN authors au ON a.article_authors LIKE '%' || au.name || '%'
+GROUP BY w.name
+ORDER BY Artykuły DESC;" 2>/dev/null || echo "Baza tygodników nie gotowa"'
 ```
 
 ## 🏗️ Architektura systemu
@@ -1495,46 +1697,66 @@ ORDER BY Posty DESC;" 2>/dev/null || echo "Baza nie gotowa"'
 forums_scraper/
 ├── 📄 README.md                    # Kompletna dokumentacja (ten plik)
 ├── ⚙️  pyproject.toml               # Konfiguracja pakietu Python
-├── 📂 data/                        # Bazy danych i wyniki
+├── 🔧 scrapy.cfg                   # Konfiguracja Scrapy
+├── 📂 data/                        # Wspólne dane
 │   └── databases/                  # SQLite bazy danych
-├── 📂 forums_scraper/              # Główny pakiet Python
-│   ├── analyzers_basic/            # 🔬 Analizatory NLP
-│   │   ├── linguistic.py           #   ├── SpacyAnalyzer
-│   │   └── tokenizer.py            #   └── TokenCountAnalyzer
-│   ├── fs_cli/                     # 🎛️ Interfejs CLI
-│   │   ├── advanced.py             #   └── Rich + Typer UI
-│   │   └── main.py                 #
-│   ├── fs_core/                    # ⚙️ Rdzeń systemu
-│   │   ├── config.py               #   ├── Konfiguracja YAML
-│   │   ├── protocol.py             #   ├── Interfejsy
-│   │   ├── registry.py             #   ├── Entry points
-│   │   └── runner.py               #   └── Async runner
-│   └── scraper/                    # 🕷️ Silnik Scrapy
-│       ├── items.py                #   ├── Modele danych
-│       ├── middlewares.py          #   ├── Middleware
-│       ├── pipelines/              #   ├── Pipeline'y
-│       │   ├── analysis.py         #   │   ├── Analiza
-│       │   └── database.py         #   │   └── Baza danych
-│       ├── settings.py             #   ├── Ustawienia
-│       ├── spiders/                #   └── Spidery forów
-│       └── utils.py
+│       ├── forums_unified.db       # Baza forów
+│       └── weeklies_unified.db     # Baza tygodników
+├── core/                        # Wspólny rdzeń systemu ✨
+│   ├── protocol.py                 #   ├── Analyzer Protocol
+│   ├── config.py                   #   ├── Konfiguracja YAML/TOML
+│   ├── registry.py                 #   ├── Ładowanie analizatorów
+│   └── runner.py                   #   └── Orchestracja analiz
+├── analyzers/                   # 🔬 Wspólne analizatory NLP
+│   ├── linguistic.py               #   ├── SpacyAnalyzer
+│   ├── tokenizer.py                #   └── TokenCountAnalyzer
+│   └── url_analyzer.py             #   └── URLAnalyzer, DomainStatsAnalyzer
+├── cli/                         # 🖥️ Wspólne CLI
+│   ├── main.py                     #   └── Entry point
+│   └── advanced.py                 #   └── Zaawansowane funkcje
+├── forums_scraper/              # 🕷️ Scraper forów
+│   ├── middlewares.py              #   ├── Middleware
+│   ├── pipelines/                  #   ├── Pipeline'y
+│   ├── spiders/                    #   ├── Spidery forów
+│   ├── items.py                    #   ├── Modele danych
+│   ├── settings.py                 #   └── Ustawienia Scrapy
+│   └── utils.py                    #   └── Narzędzia pomocnicze
+└── weeklies_scraper/            # 📰 Scraper tygodników
+    ├── spiders/                    #   ├── Spidery tygodników
+    ├── items.py                    #   ├── Modele danych
+    ├── pipelines.py                #   ├── Pipeline'y
+    ├── middlewares.py              #   ├── Middleware
+    ├── settings.py                 #   └── Ustawienia Scrapy
+    └── scrapy.cfg                  #   └── Konfiguracja Scrapy
 ```
 
 ### Przepływ danych
 
 ```mermaid
 graph TD
-    A[uv run fs-cli scrape] --> B[Scrapy Engine]
-    B --> C[Spider]
+    A[uv run cli scrape] --> B[Scrapy Engine]
+    B --> C[Forum Spider]
     C --> D[Web Scraping]
     D --> E[Items]
     E --> F[Analysis Pipeline]
     F --> G[NLP Analyzers]
     G --> H[Database Pipeline]
-    H --> I[SQLite Database]
+    H --> I[forums_unified.db]
 
-    J[Config YAML] --> F
-    K[Entry Points] --> G
+    J[scrapy crawl weekly] --> K[Weekly Spider]
+    K --> L[Web Scraping]
+    L --> M[Items]
+    M --> N[Analysis Pipeline]
+    N --> O[NLP Analyzers]
+    O --> P[Database Pipeline]
+    P --> Q[weeklies_unified.db]
+
+    R[Config YAML] --> F
+    R --> N
+    S[Entry Points] --> G
+    S --> O
+    T[core/] --> F
+    T --> N
 ```
 
 ### Wzorce projektowe
@@ -1544,6 +1766,7 @@ graph TD
 - **Strategy Pattern** - Różne typy analiz
 - **Observer Pattern** - Progress reporting
 - **Factory Pattern** - Tworzenie analizatorów
+- **Shared Core Pattern** - Wspólny rdzeń `core/` dla wszystkich scraperów
 
 ## 🚀 Rozwój i wkład
 
@@ -1554,7 +1777,7 @@ graph TD
 ```python
 # my_analyzer.py
 from typing import Any, Dict
-from forums_scraper.fs_core.protocol import Analyzer
+from core.protocol import Analyzer
 
 class MyCustomAnalyzer(Analyzer):
     def __init__(self, **config):
@@ -1605,7 +1828,7 @@ analysis:
 ```python
 # new_forum_spider.py
 import scrapy
-from forums_scraper.scraper.items import ForumPostItem
+from forums_scraper.items import ForumPostItem
 
 class NewForumSpider(scrapy.Spider):
     name = 'new_forum'
@@ -1617,10 +1840,37 @@ class NewForumSpider(scrapy.Spider):
         pass
 ```
 
-#### **2. Aktualizacja CLI**
+### Dodawanie nowych tygodników
+
+#### **1. Implementacja spidera tygodnika**
 
 ```python
-# W fs_cli/advanced.py
+# new_weekly_spider.py
+import scrapy
+from items import WeeklyItem, IssueItem, ArticleItem
+
+class NewWeeklySpider(scrapy.Spider):
+    name = 'new_weekly'
+    allowed_domains = ['newweekly.com']
+    start_urls = ['https://newweekly.com/archiwum']
+
+    def parse_archive(self, response):
+        # Implementacja scrapowania archiwum
+        pass
+```
+
+#### **2. Uruchomienie tygodnika**
+
+```bash
+# Z katalogu weeklies_scraper/
+cd weeklies_scraper
+scrapy crawl new_weekly -s LOG_LEVEL=INFO -s SQLITE_DATABASE_PATH=../data/databases/weeklies_unified.db
+```
+
+#### **3. Aktualizacja CLI**
+
+```python
+# W cli/advanced.py
 class ForumName(str, Enum):
     # ... istniejące fora
     NEW_FORUM = "new_forum"
@@ -1648,12 +1898,12 @@ uv run python -m pytest tests/analyzers/
 
 ```bash
 # Formatowanie kodu
-uv run black forums_scraper/
-uv run isort forums_scraper/
+uv run black .
+uv run isort .
 
 # Linting
-uv run flake8 forums_scraper/
-uv run mypy forums_scraper/
+uv run flake8 .
+uv run mypy .
 ```
 
 ## 📚 Zasoby dodatkowe
@@ -1663,11 +1913,12 @@ uv run mypy forums_scraper/
 - **README.md** (ten plik) - Kompletna dokumentacja
 - [API Documentation](docs/api/) - Dokumentacja API (w przygotowaniu)
 - [Database Schema](docs/database.md) - Schemat bazy danych (w przygotowaniu)
+- **Wspólny rdzeń** - `core/` - Wspólne komponenty dla wszystkich scraperów
 
 ### Przykłady użycia
 
 - **README.md** (ten plik) - Kompletne przykłady SQL i konfiguracji
-- **CLI** - Automatyczne generowanie konfiguracji: `uv run fs-cli config`
+- **CLI** - Automatyczne generowanie konfiguracji: `uv run cli config`
 - **Dokumentacja inline** - Wszystkie przykłady w tym pliku
 
 ### Społeczność
@@ -1687,12 +1938,14 @@ MIT License - zobacz [LICENSE](LICENSE) dla szczegółów.
 - **spaCy Team** - za zaawansowane narzędzia NLP
 - **Rich Team** - za piękny interfejs CLI
 - **Społeczność Open Source** - za inspirację i wsparcie
+- **Wspólny rdzeń** - `core/` - za modularną architekturę
 
 ---
 
 **Autor:** alb  
 **Wersja:** 0.1.0  
 **Python:** 3.10+  
-**Licencja:** MIT
+**Licencja:** MIT  
+**Architektura:** Wspólny rdzeń `core/` dla forów i tygodników
 
-_Forums Scraper - Profesjonalne narzędzie do analizy dyskursu religijnego w internecie_ 🕷️✨
+_Forums & Weeklies Scraper - Profesjonalne narzędzie do analizy dyskursu religijnego w internecie i mediach_ 🕷️📰✨
