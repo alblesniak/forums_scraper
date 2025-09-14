@@ -1,0 +1,14 @@
+analysis:
+  enabled: true
+  analyzers:
+    - name: token_count
+      params:
+        model: cl100k_base
+  concurrency: 4
+output:
+  db: sqlite:///data/databases/forums.db
+scrapy:
+  concurrent_requests: 16
+  autothrottle: true
+
+
