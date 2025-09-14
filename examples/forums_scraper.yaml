@@ -1,14 +1,32 @@
 analysis:
   enabled: true
   analyzers:
-    - name: token_count
-      params:
-        model: cl100k_base
+    # Podstawowa tokenizacja
+    - name: basic_tokenizer
+      config:
+        lowercase: true
+        remove_punctuation: false
+        min_token_length: 2
+
+    # Liczenie tokenów OpenAI
+    - name: token_counter
+      config:
+        encoding: cl100k_base
+
+    # Pełna analiza spaCy (opcjonalna - wymaga zainstalowania spacy i modelu)
+    # Odkomentuj poniższe linie po zainstalowaniu: pip install spacy && python -m spacy download pl_core_news_sm
+    # - name: spacy_analyzer
+    #   config:
+    #     model: pl_core_news_sm
+    #     include_sentiment: true
+    #     batch_size: 100
+    #     max_length: 1000000
+
   concurrency: 4
+
 output:
   db: sqlite:///data/databases/forums.db
+
 scrapy:
   concurrent_requests: 16
   autothrottle: true
-
-
