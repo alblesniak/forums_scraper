@@ -3,6 +3,7 @@
 **Zaawansowany scraper forów religijnych z równoległymi analizami NLP i bazami danych SQLite**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![uv](https://img.shields.io/badge/uv-enabled-red.svg)](https://docs.astral.sh/uv/)
 [![Scrapy](https://img.shields.io/badge/scrapy-2.11+-green.svg)](https://scrapy.org/)
 [![spaCy](https://img.shields.io/badge/spaCy-3.4+-orange.svg)](https://spacy.io/)
 [![Rich CLI](https://img.shields.io/badge/CLI-Rich%20%2B%20Typer-purple.svg)](https://rich.readthedocs.io/)
@@ -58,11 +59,25 @@ Forums Scraper to profesjonalne narzędzie do scrapowania forów religijnych z z
 ### Wymagania systemowe
 
 - **Python 3.10+** (sprawdź: `python --version`)
+- **uv** - nowoczesny menedżer pakietów Python ([instalacja](https://docs.astral.sh/uv/getting-started/installation/))
 - **4GB RAM** (minimum), **8GB RAM** (zalecane dla spaCy)
 - **Połączenie internetowe** dla scrapowania
 - **~500MB** miejsca na dysku (zależnie od liczby forów)
 
-### Krok 1: Pobranie kodu
+### Krok 1: Instalacja uv (jeśli nie masz)
+
+```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Sprawdź instalację
+uv --version
+```
+
+### Krok 2: Pobranie kodu
 
 ```bash
 # Klonowanie repozytorium
@@ -70,93 +85,136 @@ git clone https://github.com/username/forums_scraper.git
 cd forums_scraper
 ```
 
-### Krok 2: Instalacja
+### Krok 3: Instalacja z uv
 
 #### **Opcja A: Instalacja podstawowa** (tylko scrapowanie)
 
 ```bash
-pip install -e .
+uv pip install -e .
 ```
 
 #### **Opcja B: Z analizatorami podstawowymi** (+ tiktoken)
 
 ```bash
-pip install -e ".[analyzers-basic]"
+uv pip install -e ".[analyzers-basic]"
 ```
 
 #### **Opcja C: Z pełnymi analizatorami** (+ spaCy)
 
 ```bash
-pip install -e ".[analyzers-linguistic]"
-python -m spacy download pl_core_news_sm
+uv pip install -e ".[analyzers-linguistic]"
+uv run python -m spacy download pl_core_news_sm
 ```
 
 #### **Opcja D: Pełna instalacja** (zalecane)
 
 ```bash
-pip install -e ".[all]"
-python -m spacy download pl_core_news_sm
+uv pip install -e ".[all]"
+uv run python -m spacy download pl_core_news_sm
 ```
 
-### Krok 3: Weryfikacja
+#### **Opcja E: Z wirtualnym środowiskiem** (najbezpieczniejsze)
+
+```bash
+# Utwórz i aktywuj venv
+uv venv
+source .venv/bin/activate  # Linux/macOS
+# lub .venv\Scripts\activate  # Windows
+
+# Zainstaluj z pełnymi funkcjami
+uv pip install -e ".[all]"
+uv run python -m spacy download pl_core_news_sm
+```
+
+### Krok 4: Weryfikacja
 
 ```bash
 # Sprawdź czy CLI działa
-fs-cli --help
+uv run fs-cli --help
 
 # Lista dostępnych forów
-fs-cli list-spiders
+uv run fs-cli list-spiders
 
 # Lista dostępnych analizatorów
-fs-cli list-analyzers
+uv run fs-cli list-analyzers
 
 # Test bez scrapowania
-fs-cli scrape --forum radio_katolik --dry-run
+uv run fs-cli scrape --forum radio_katolik --dry-run
 ```
 
-### Krok 4: Pierwsze uruchomienie
+### Krok 5: Pierwsze uruchomienie
 
 ```bash
 # Scrapuj jedno forum z podstawową analizą
-fs-cli scrape --forum radio_katolik --analysis basic_tokens
+uv run fs-cli scrape --forum radio_katolik --analysis basic_tokens
 
 # Sprawdź wyniki
-fs-cli status
+uv run fs-cli status
 ```
 
 ### Rozwiązywanie problemów instalacji
 
+#### **Błąd "uv: command not found"**
+
+```bash
+# Zainstaluj uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc  # lub ~/.zshrc
+
+# Sprawdź instalację
+uv --version
+```
+
 #### **Błąd "fs-cli: command not found"**
 
 ```bash
-# Znajdź ścieżkę do skryptu
-find ~/.pyenv -name "fs-cli" 2>/dev/null
+# Użyj uv run zamiast bezpośredniego wywołania
+uv run fs-cli --help
 
-# Użyj pełnej ścieżki (przykład)
-~/.pyenv/versions/3.11.9/bin/fs-cli --help
+# Jeśli używasz venv, upewnij się że jest aktywowany
+source .venv/bin/activate
+uv run fs-cli --help
 ```
 
 #### **Błąd "spaCy model not found"**
 
 ```bash
-python -m spacy download pl_core_news_sm
+uv run python -m spacy download pl_core_news_sm
 
 # Lub większy model (lepszy, ale wolniejszy)
-python -m spacy download pl_core_news_lg
+uv run python -m spacy download pl_core_news_lg
 ```
 
 #### **Błąd "tiktoken not found"**
 
 ```bash
-pip install tiktoken
+uv uv pip install tiktoken
 ```
 
 #### **Problemy z pamięcią**
 
 ```bash
 # Zmniejsz batch size dla analiz
-fs-cli scrape --batch-size 25
+uv run fs-cli scrape --batch-size 25
 ```
+
+#### **Problemy z wirtualnym środowiskiem**
+
+```bash
+# Usuń i utwórz ponownie venv
+rm -rf .venv
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[all]"
+```
+
+### Dlaczego uv?
+
+- **⚡ Szybkość** - do 100x szybsza instalacja pakietów niż pip
+- **🔒 Bezpieczeństwo** - automatyczna weryfikacja integralności pakietów
+- **🎯 Prostota** - jednolity interfejs dla wszystkich operacji Python
+- **🌍 Kompatybilność** - pełna zgodność z pip i PyPI
+- **💾 Efektywność** - inteligentne cache'owanie i deduplikacja
 
 ## 🎮 Przewodnik użytkownika
 
@@ -165,7 +223,7 @@ fs-cli scrape --batch-size 25
 #### 1. **Scrapowanie wszystkich forów** (zalecane dla początkujących)
 
 ```bash
-fs-cli scrape
+uv run fs-cli scrape
 ```
 
 - Scrapuje wszystkie 4 fora
@@ -175,13 +233,13 @@ fs-cli scrape
 #### 2. **Scrapowanie konkretnego forum**
 
 ```bash
-fs-cli scrape --forum radio_katolik
+uv run fs-cli scrape --forum radio_katolik
 ```
 
 #### 3. **Scrapowanie z analizą spaCy**
 
 ```bash
-fs-cli scrape --forum wiara --analysis spacy_full --sentiment
+uv run fs-cli scrape --forum wiara --analysis spacy_full --sentiment
 ```
 
 ### Zaawansowane opcje
@@ -189,7 +247,7 @@ fs-cli scrape --forum wiara --analysis spacy_full --sentiment
 #### **Wybór wielu forów i analiz**
 
 ```bash
-fs-cli scrape \
+uv run fs-cli scrape \
   --forum wiara \
   --forum dolina_modlitwy \
   --analysis basic_tokens \
@@ -200,7 +258,7 @@ fs-cli scrape \
 #### **Optymalizacja wydajności**
 
 ```bash
-fs-cli scrape \
+uv run fs-cli scrape \
   --concurrent 32 \
   --delay 0.1 \
   --batch-size 200 \
@@ -210,7 +268,7 @@ fs-cli scrape \
 #### **Tryb testowy (bez scrapowania)**
 
 ```bash
-fs-cli scrape --forum wiara --analysis all --dry-run
+uv run fs-cli scrape --forum wiara --analysis all --dry-run
 ```
 
 ### Zarządzanie danymi
@@ -218,7 +276,7 @@ fs-cli scrape --forum wiara --analysis all --dry-run
 #### **Status baz danych**
 
 ```bash
-fs-cli status
+uv run fs-cli status
 ```
 
 Wyświetla:
@@ -231,10 +289,10 @@ Wyświetla:
 
 ```bash
 # Utwórz plik konfiguracyjny
-fs-cli config --analysis spacy_full --sentiment --output my_config.yaml
+uv run fs-cli config --analysis spacy_full --sentiment --output my_config.yaml
 
 # Użyj własnej konfiguracji
-fs-cli scrape --config my_config.yaml
+uv run fs-cli scrape --config my_config.yaml
 ```
 
 ## 📋 Dostępne fora
@@ -723,7 +781,7 @@ scrapy:
 #### **Dla szybkiego scrapowania**
 
 ```bash
-fs-cli scrape \
+uv run fs-cli scrape \
   --concurrent 64 \
   --delay 0.1 \
   --analysis basic_tokens \
@@ -733,7 +791,7 @@ fs-cli scrape \
 #### **Dla dokładnej analizy**
 
 ```bash
-fs-cli scrape \
+uv run fs-cli scrape \
   --concurrent 8 \
   --delay 1.0 \
   --batch-size 50 \
@@ -745,7 +803,7 @@ fs-cli scrape \
 #### **Dla ograniczonych zasobów**
 
 ```bash
-fs-cli scrape \
+uv run fs-cli scrape \
   --concurrent 4 \
   --delay 2.0 \
   --batch-size 25 \
@@ -771,34 +829,34 @@ python -m spacy download pl_core_news_lg
 
 ```bash
 # Rozwiązanie
-pip install tiktoken
+uv pip install tiktoken
 ```
 
 #### **3. Problemy z pamięcią podczas analizy spaCy**
 
 ```bash
 # Zmniejsz batch size
-fs-cli scrape --batch-size 25 --analysis spacy_full
+uv run fs-cli scrape --batch-size 25 --analysis spacy_full
 
 # Lub użyj mniejszego modelu
-fs-cli scrape --spacy-model pl_core_news_sm
+uv run fs-cli scrape --spacy-model pl_core_news_sm
 ```
 
 #### **4. Zbyt wolne scrapowanie**
 
 ```bash
 # Zwiększ równoległość (ostrożnie!)
-fs-cli scrape --concurrent 32 --delay 0.2
+uv run fs-cli scrape --concurrent 32 --delay 0.2
 
 # Wyłącz analizy dla szybszego scrapowania
-fs-cli scrape --analysis none
+uv run fs-cli scrape --analysis none
 ```
 
 #### **5. Błędy połączenia sieciowego**
 
 ```bash
 # Zwiększ opóźnienia
-fs-cli scrape --delay 2.0 --concurrent 8
+uv run fs-cli scrape --delay 2.0 --concurrent 8
 
 # Sprawdź połączenie internetowe
 ping google.com
@@ -809,19 +867,19 @@ ping google.com
 #### **Włącz szczegółowe logi**
 
 ```bash
-fs-cli scrape --verbose --forum radio_katolik
+uv run fs-cli scrape --verbose --forum radio_katolik
 ```
 
 #### **Testuj bez scrapowania**
 
 ```bash
-fs-cli scrape --dry-run --analysis all
+uv run fs-cli scrape --dry-run --analysis all
 ```
 
 #### **Sprawdź status baz danych**
 
 ```bash
-fs-cli status
+uv run fs-cli status
 ```
 
 ### Monitorowanie wydajności
@@ -878,7 +936,7 @@ forums_scraper/
 
 ```mermaid
 graph TD
-    A[fs-cli scrape] --> B[Scrapy Engine]
+    A[uv run fs-cli scrape] --> B[Scrapy Engine]
     B --> C[Spider]
     C --> D[Web Scraping]
     D --> E[Items]
@@ -989,25 +1047,25 @@ FORUM_SPIDER_MAP = {
 
 ```bash
 # Testy jednostkowe
-python -m pytest tests/
+uv run python -m pytest tests/
 
 # Testy integracyjne
-python -m pytest tests/integration/
+uv run python -m pytest tests/integration/
 
 # Testy analizatorów
-python -m pytest tests/analyzers/
+uv run python -m pytest tests/analyzers/
 ```
 
 ### Code style
 
 ```bash
 # Formatowanie kodu
-black forums_scraper/
-isort forums_scraper/
+uv run black forums_scraper/
+uv run isort forums_scraper/
 
 # Linting
-flake8 forums_scraper/
-mypy forums_scraper/
+uv run flake8 forums_scraper/
+uv run mypy forums_scraper/
 ```
 
 ## 📚 Zasoby dodatkowe
@@ -1036,6 +1094,7 @@ MIT License - zobacz [LICENSE](LICENSE) dla szczegółów.
 
 ## 🙏 Podziękowania
 
+- **Astral Team** - za ultraszybki menedżer pakietów uv
 - **Scrapy Team** - za doskonały framework scrapowania
 - **spaCy Team** - za zaawansowane narzędzia NLP
 - **Rich Team** - za piękny interfejs CLI
