@@ -77,6 +77,7 @@ SPIDER_MIDDLEWARES = {
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 ITEM_PIPELINES = {
+   "scraper.pipelines.analysis.AnalysisPipeline": 250,
    "scraper.pipelines.SQLitePipeline": 300,
 }
 
@@ -120,3 +121,10 @@ LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
 # SQLite database settings - każdy spider będzie miał swoją dedykowaną bazę danych
 # Format: data/databases/forum_[nazwa_spidera].db
 # SQLITE_DATABASE_PATH = "data/databases/forums.db"  # Nie używane - każdy spider ma swoją bazę
+
+# Ustawienia forums-scraper
+# Ścieżka do pliku konfiguracyjnego YAML/TOML (opcjonalna)
+FS_CONFIG_PATH = "examples/forums_scraper.yaml"
+
+# Wymuś asyncio reactor dla wsparcia async pipeline
+TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"
