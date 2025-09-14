@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict
 
-from fs_core.config import AppConfig, load_config
-from fs_core.runner import AnalysisRunner
+from forums_scraper.fs_core.config import AppConfig, load_config
+from forums_scraper.fs_core.runner import AnalysisRunner
 
 
 class AnalysisPipeline:
