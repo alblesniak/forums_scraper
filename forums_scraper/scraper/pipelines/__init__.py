@@ -10,7 +10,7 @@ from datetime import datetime
 from urllib.parse import urlparse, parse_qs, urlunparse, urlencode
 import json
 from itemadapter import ItemAdapter
-from .items import ForumItem, ForumSectionItem, ForumThreadItem, ForumUserItem, ForumPostItem
+from ..items import ForumItem, ForumSectionItem, ForumThreadItem, ForumUserItem, ForumPostItem
 
 
 def convert_polish_date_to_standard(polish_date_str):

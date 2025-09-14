@@ -26,13 +26,8 @@ class SQLitePipeline:
     @classmethod
     def from_crawler(cls, crawler):
         # Pobierz ścieżkę z ustawień lub użyj domyślnej
-        database_path = crawler.settings.get('SQLITE_DATABASE_PATH', 'data/databases/forums.db')
-        # Dodaj nazwę spidera do ścieżki bazy danych
-        if hasattr(crawler, 'spider') and crawler.spider:
-            spider_name = crawler.spider.name
-            path = Path(database_path)
-            database_path = str(path.parent / f"forum_{spider_name}.db")
-        
+        database_path = crawler.settings.get('SQLITE_DATABASE_PATH', 'data/databases/forums_unified.db')
+        # Używamy jednej wspólnej bazy danych dla wszystkich forów
         return cls(database_path=database_path)
     
     def open_spider(self, spider):
@@ -172,6 +167,7 @@ class SQLitePipeline:
                 pos TEXT,  -- część mowy
                 tag TEXT,  -- szczegółowy tag
                 dep TEXT,  -- relacja składniowa
+                morph_features TEXT,  -- cechy morfologiczne (JSON)
                 is_alpha BOOLEAN,
                 is_stop BOOLEAN,
                 is_punct BOOLEAN,
@@ -198,12 +194,101 @@ class SQLitePipeline:
             )
         ''')
         
+        # Tabela domen
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS domains (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                domain TEXT UNIQUE NOT NULL,
+                category TEXT,  -- 'religious', 'media', 'social', 'educational', 'unknown'
+                is_religious BOOLEAN DEFAULT 0,
+                is_media BOOLEAN DEFAULT 0,
+                is_social BOOLEAN DEFAULT 0,
+                is_educational BOOLEAN DEFAULT 0,
+                trust_score REAL DEFAULT 0.5,
+                first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                total_references INTEGER DEFAULT 0
+            )
+        ''')
+        
+        # Tabela URL-ów z postów
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS post_urls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id TEXT,
+                url TEXT,
+                domain_id INTEGER,
+                url_type TEXT,  -- 'article', 'video', 'image', 'social', 'unknown'
+                is_external BOOLEAN DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (post_id) REFERENCES posts (id),
+                FOREIGN KEY (domain_id) REFERENCES domains (id)
+            )
+        ''')
+        
+        # Statystyki URL-ów per post
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS post_url_stats (
+                post_id TEXT PRIMARY KEY,
+                total_urls INTEGER DEFAULT 0,
+                unique_domains INTEGER DEFAULT 0,
+                religious_urls INTEGER DEFAULT 0,
+                media_urls INTEGER DEFAULT 0,
+                social_urls INTEGER DEFAULT 0,
+                educational_urls INTEGER DEFAULT 0,
+                unknown_urls INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (post_id) REFERENCES posts (id)
+            )
+        ''')
+        
+        # Named Entities (rozpoznane nazwy własne)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS post_named_entities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id TEXT,
+                entity_text TEXT,        -- Tekst encji (np. "Jan Paweł II")
+                entity_label TEXT,       -- Typ encji (PERSON, ORG, GPE, etc.)
+                entity_description TEXT, -- Opis typu encji
+                start_char INTEGER,      -- Pozycja początkowa w tekście
+                end_char INTEGER,        -- Pozycja końcowa w tekście
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (post_id) REFERENCES posts (id)
+            )
+        ''')
+        
+        # Statystyki Named Entities per post
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS post_ner_stats (
+                post_id TEXT PRIMARY KEY,
+                total_entities INTEGER DEFAULT 0,
+                person_entities INTEGER DEFAULT 0,    -- Osoby
+                org_entities INTEGER DEFAULT 0,       -- Organizacje
+                gpe_entities INTEGER DEFAULT 0,       -- Miejsca geograficzne
+                event_entities INTEGER DEFAULT 0,     -- Wydarzenia
+                other_entities INTEGER DEFAULT 0,     -- Inne
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (post_id) REFERENCES posts (id)
+            )
+        ''')
+        
         # Indeksy dla lepszej wydajności
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_posts_thread_id ON posts(thread_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_tokens_post_id ON post_tokens(post_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_linguistic_post_id ON post_linguistic_analysis(post_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at)')
+        
+        # Indeksy dla URL-ów i domen
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_post_urls_post_id ON post_urls(post_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_post_urls_domain_id ON post_urls(domain_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_domains_category ON domains(category)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_domains_domain ON domains(domain)')
+        
+        # Indeksy dla Named Entities
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_named_entities_post_id ON post_named_entities(post_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_named_entities_label ON post_named_entities(entity_label)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_named_entities_text ON post_named_entities(entity_text)')
         
         self.connection.commit()
         logger.info("Tabele utworzone pomyślnie")
@@ -363,6 +448,18 @@ class SQLitePipeline:
         if 'linguistic_stats' in analysis_data:
             self._save_linguistic_stats(cursor, post_id, analysis_data['linguistic_stats'])
         
+        # Zapisz analizę URL-ów
+        if 'url_analysis' in analysis_data:
+            self._save_url_analysis(cursor, post_id, analysis_data['url_analysis'])
+        
+        # Zapisz statystyki domen
+        if 'domain_stats' in analysis_data:
+            self._save_domain_stats(cursor, post_id, analysis_data['domain_stats'])
+        
+        # Zapisz Named Entities
+        if 'named_entities' in analysis_data:
+            self._save_named_entities(cursor, post_id, analysis_data['named_entities'])
+        
         self.connection.commit()
     
     def _save_tokens(self, cursor, post_id: str, tokens_data):
@@ -399,10 +496,13 @@ class SQLitePipeline:
         # Zapisz nową analizę
         if isinstance(linguistic_data, list):
             for token_data in linguistic_data:
+                # Serializuj cechy morfologiczne do JSON
+                morph_json = json.dumps(token_data.get('morph_features', {}))
+                
                 cursor.execute('''
                     INSERT INTO post_linguistic_analysis 
-                    (post_id, token, lemma, pos, tag, dep, is_alpha, is_stop, is_punct, sentiment_score)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (post_id, token, lemma, pos, tag, dep, morph_features, is_alpha, is_stop, is_punct, sentiment_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     post_id,
                     token_data.get('token'),
@@ -410,6 +510,7 @@ class SQLitePipeline:
                     token_data.get('pos'),
                     token_data.get('tag'),
                     token_data.get('dep'),
+                    morph_json,
                     token_data.get('is_alpha'),
                     token_data.get('is_stop'),
                     token_data.get('is_punct'),
@@ -433,4 +534,176 @@ class SQLitePipeline:
             stats_data.get('sentiment_polarity'),
             stats_data.get('sentiment_subjectivity'),
             stats_data.get('language_detected')
+        ))
+    
+    def _save_url_analysis(self, cursor, post_id: str, url_data):
+        """Zapisuje analizę URL-ów do bazy danych."""
+        if not isinstance(url_data, dict):
+            return
+        
+        categorized_urls = url_data.get('categorized_urls', [])
+        domain_categories = url_data.get('domain_categories', {})
+        
+        # Usuń stare URL-e dla tego posta
+        cursor.execute('DELETE FROM post_urls WHERE post_id = ?', (post_id,))
+        
+        # Zapisz domeny i URL-e
+        for url_info in categorized_urls:
+            domain = url_info.get('domain')
+            if not domain:
+                continue
+            
+            # Znajdź lub utwórz domenę
+            domain_id = self._get_or_create_domain(cursor, domain, domain_categories.get(domain, {}))
+            
+            # Zapisz URL
+            cursor.execute('''
+                INSERT INTO post_urls 
+                (post_id, url, domain_id, url_type, is_external)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (
+                post_id,
+                url_info.get('url'),
+                domain_id,
+                url_info.get('url_type', 'unknown'),
+                url_info.get('is_external', True)
+            ))
+        
+        # Zapisz statystyki URL-ów
+        domain_stats = url_data.get('domain_stats', {})
+        if domain_stats:
+            cursor.execute('''
+                INSERT OR REPLACE INTO post_url_stats 
+                (post_id, total_urls, unique_domains, religious_urls, media_urls, 
+                 social_urls, educational_urls, unknown_urls)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                post_id,
+                url_data.get('total_urls', 0),
+                domain_stats.get('total_domains', 0),
+                domain_stats.get('religious_domains', 0),
+                domain_stats.get('media_domains', 0),
+                domain_stats.get('social_domains', 0),
+                domain_stats.get('educational_domains', 0),
+                domain_stats.get('unknown_domains', 0)
+            ))
+    
+    def _save_domain_stats(self, cursor, post_id: str, stats_data):
+        """Zapisuje podstawowe statystyki domen."""
+        if not isinstance(stats_data, dict):
+            return
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO post_url_stats 
+            (post_id, total_urls, unique_domains)
+            VALUES (?, ?, ?)
+        ''', (
+            post_id,
+            stats_data.get('external_links_count', 0),
+            stats_data.get('unique_domains_count', 0)
+        ))
+    
+    def _get_or_create_domain(self, cursor, domain: str, domain_info: dict) -> int:
+        """Znajdź lub utwórz domenę w bazie danych."""
+        # Sprawdź czy domena już istnieje
+        cursor.execute('SELECT id FROM domains WHERE domain = ?', (domain,))
+        result = cursor.fetchone()
+        
+        if result:
+            domain_id = result[0]
+            # Zaktualizuj last_seen i total_references
+            cursor.execute('''
+                UPDATE domains 
+                SET last_seen = CURRENT_TIMESTAMP, 
+                    total_references = total_references + 1
+                WHERE id = ?
+            ''', (domain_id,))
+            return domain_id
+        else:
+            # Utwórz nową domenę
+            cursor.execute('''
+                INSERT INTO domains 
+                (domain, category, is_religious, is_media, is_social, is_educational, trust_score, total_references)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            ''', (
+                domain,
+                domain_info.get('category', 'unknown'),
+                domain_info.get('is_religious', False),
+                domain_info.get('is_media', False),
+                domain_info.get('is_social', False),
+                domain_info.get('is_educational', False),
+                domain_info.get('trust_score', 0.5)
+            ))
+            return cursor.lastrowid
+    
+    def _save_named_entities(self, cursor, post_id: str, entities_data):
+        """Zapisuje Named Entities do bazy danych."""
+        if not isinstance(entities_data, list):
+            return
+        
+        # Usuń stare encje dla tego posta
+        cursor.execute('DELETE FROM post_named_entities WHERE post_id = ?', (post_id,))
+        
+        # Liczniki dla statystyk
+        entity_counts = {
+            'total': 0,
+            'person': 0,
+            'org': 0,
+            'gpe': 0,  # Geopolitical entities (miejsca)
+            'event': 0,
+            'other': 0
+        }
+        
+        # Zapisz każdą encję
+        for entity in entities_data:
+            if not isinstance(entity, dict):
+                continue
+                
+            entity_text = entity.get('text', '').strip()
+            entity_label = entity.get('label', 'OTHER')
+            
+            if not entity_text:
+                continue
+            
+            cursor.execute('''
+                INSERT INTO post_named_entities 
+                (post_id, entity_text, entity_label, entity_description, start_char, end_char)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                post_id,
+                entity_text,
+                entity_label,
+                entity.get('description', ''),
+                entity.get('start', 0),
+                entity.get('end', 0)
+            ))
+            
+            # Aktualizuj liczniki
+            entity_counts['total'] += 1
+            
+            if entity_label in ['PERSON', 'PER']:
+                entity_counts['person'] += 1
+            elif entity_label in ['ORG', 'ORGANIZATION']:
+                entity_counts['org'] += 1
+            elif entity_label in ['GPE', 'LOC', 'LOCATION']:
+                entity_counts['gpe'] += 1
+            elif entity_label in ['EVENT']:
+                entity_counts['event'] += 1
+            else:
+                entity_counts['other'] += 1
+        
+        # Zapisz statystyki NER
+        cursor.execute('''
+            INSERT OR REPLACE INTO post_ner_stats 
+            (post_id, total_entities, person_entities, org_entities, 
+             gpe_entities, event_entities, other_entities)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            post_id,
+            entity_counts['total'],
+            entity_counts['person'],
+            entity_counts['org'],
+            entity_counts['gpe'],
+            entity_counts['event'],
+            entity_counts['other']
         ))

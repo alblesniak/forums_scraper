@@ -33,7 +33,7 @@ Forums Scraper to profesjonalne narzędzie do scrapowania forów religijnych z z
 
 - **Osobne bazy SQLite** dla każdego forum
 - **Pełny schemat relacyjny** - fora, sekcje, wątki, użytkownicy, posty
-- **Tabele analiz** - tokeny, statystyki językowe, analiza morfosyntaktyczna
+- **Tabele analiz** - tokeny, statystyki językowe, analiza morfosyntaktyczna, URL-e i domeny
 - **Indeksy wydajnościowe** - szybkie zapytania analityczne
 - **Automatyczne backupy** - bezpieczne przechowywanie danych
 
@@ -103,14 +103,14 @@ uv pip install -e ".[analyzers-basic]"
 
 ```bash
 uv pip install -e ".[analyzers-linguistic]"
-uv run python -m spacy download pl_core_news_sm
+uv run python -m spacy download pl_core_news_lg
 ```
 
 #### **Opcja D: Pełna instalacja** (zalecane)
 
 ```bash
 uv pip install -e ".[all]"
-uv run python -m spacy download pl_core_news_sm
+uv run python -m spacy download pl_core_news_lg
 ```
 
 #### **Opcja E: Z wirtualnym środowiskiem** (najbezpieczniejsze)
@@ -123,7 +123,7 @@ source .venv/bin/activate  # Linux/macOS
 
 # Zainstaluj z pełnymi funkcjami
 uv pip install -e ".[all]"
-uv run python -m spacy download pl_core_news_sm
+uv run python -m spacy download pl_core_news_lg
 ```
 
 ### Krok 4: Weryfikacja
@@ -179,7 +179,7 @@ uv run fs-cli --help
 #### **Błąd "spaCy model not found"**
 
 ```bash
-uv run python -m spacy download pl_core_news_sm
+uv run python -m spacy download pl_core_news_lg
 
 # Lub większy model (lepszy, ale wolniejszy)
 uv run python -m spacy download pl_core_news_lg
@@ -228,7 +228,7 @@ uv run fs-cli scrape
 
 - Scrapuje wszystkie 4 fora
 - Używa podstawowej tokenizacji
-- Zapisuje do `data/databases/forum_*.db`
+- Zapisuje do wspólnej bazy: `data/databases/forums_unified.db`
 
 #### 2. **Scrapowanie konkretnego forum**
 
@@ -359,19 +359,29 @@ uv run fs-cli scrape --config my_config.yaml
 ```yaml
 - name: spacy_analyzer
   config:
-    model: pl_core_news_sm # Model języka polskiego
+    model: pl_core_news_lg # Model języka polskiego (duży, najlepszy)
     include_sentiment: true # Włącz analizę sentymentu
     batch_size: 100 # Rozmiar batcha
     max_length: 1000000 # Maks. długość tekstu
 ```
+
+**Komponenty spaCy wykorzystywane:**
+
+- **tok2vec** - wektoryzacja tokenów (automatycznie)
+- **morphologizer** - cechy morfologiczne (przypadek, liczba, rodzaj)
+- **parser** - analiza składniowa (dependency parsing)
+- **lemmatizer** - lematyzacja (formy podstawowe)
+- **tagger** - tagowanie części mowy (POS)
+- **senter** - segmentacja zdań
+- **ner** - rozpoznawanie nazw własnych
 
 **Wyniki linguistyczne:**
 
 - **Lematyzacja** - forma podstawowa słów
 - **POS tagging** - części mowy (rzeczownik, czasownik, etc.)
 - **Dependency parsing** - relacje składniowe
-- **Named Entity Recognition** - rozpoznawanie nazw własnych
-- **Analiza sentymentu** - polarność emocjonalna
+- **Named Entity Recognition** - osoby, organizacje, miejsca, wydarzenia
+- **Analiza sentymentu** - polarność emocjonalna z rozszerzonym słownictwem religijnym
 
 **Statystyki tekstowe:**
 
@@ -383,11 +393,65 @@ uv run fs-cli scrape --config my_config.yaml
 **Zalety:** Najwyższa jakość analizy
 **Wady:** Wymaga spaCy i modelu językowego
 
-### 4. **Wszystkie analizy** (`all`)
+### 4. **Analiza URL-ów** (`url_analysis`)
 
-Włącza wszystkie dostępne analizatory jednocześnie.
+```yaml
+- name: url_analyzer
+  config:
+    include_domain_analysis: true # Kategoryzacja domen
+    include_url_categorization: true # Klasyfikacja URL-ów
+    max_urls_per_post: 50 # Limit URL-ów per post
+```
+
+**Funkcje:**
+
+- **Kategoryzacja domen** - religijne, media, społecznościowe, edukacyjne
+- **Klasyfikacja URL-ów** - artykuły, wideo, obrazy, social media
+- **Ocena wiarygodności** - trust score dla domen (0.0-1.0)
+- **Statystyki** - liczba domen, typy linków per post
+- **Deduplikacja** - unikalne domeny w bazie
+
+**Kategorie domen:**
+
+- **Religijne**: catholic.pl, vatican.va, opoka.org.pl, radiomaryja.pl
+- **Media**: youtube.com, tvp.pl, gazeta.pl, onet.pl
+- **Społecznościowe**: facebook.com, twitter.com, instagram.com
+- **Edukacyjne**: wikipedia.org, academia.edu, scholar.google.com
+
+**Zalety:** Szczegółowa analiza linków, kategorie polskie
+**Wady:** Brak
+
+### 5. **Statystyki domen** (`domain_stats`)
+
+```yaml
+- name: domain_stats
+  config:
+    track_popularity: true # Śledzenie popularności domen
+```
+
+**Funkcje:**
+
+- Podstawowe liczenie URL-ów i domen
+- Szybka analiza bez kategoryzacji
+- Deduplikacja domen
+
+**Zalety:** Szybka, lekka
+**Wady:** Brak kategoryzacji
+
+### 6. **Wszystkie analizy** (`all`)
+
+Włącza wszystkie dostępne analizatory: tokeny + spaCy + URL-e + domeny.
 
 ## 🗄️ Struktura bazy danych
+
+**Wspólna baza SQLite:** `data/databases/forums_unified.db`
+
+Wszystkie fora, posty i analizy są przechowywane w jednej bazie danych, co umożliwia:
+
+- **Analizy porównawcze** między forami
+- **Łatwiejsze zapytania** SQL
+- **Prostsze zarządzanie** danymi
+- **Efektywniejsze** przechowywanie
 
 ### Tabele główne
 
@@ -511,6 +575,7 @@ CREATE TABLE post_linguistic_analysis (
     pos TEXT,             -- Część mowy
     tag TEXT,             -- Szczegółowy tag
     dep TEXT,             -- Relacja składniowa
+    morph_features TEXT,  -- Cechy morfologiczne (JSON: przypadek, liczba, rodzaj)
     is_alpha BOOLEAN,     -- Czy alfanumeryczny
     is_stop BOOLEAN,      -- Czy stop word
     is_punct BOOLEAN,     -- Czy interpunkcja
@@ -538,25 +603,112 @@ CREATE TABLE post_linguistic_stats (
 );
 ```
 
+#### **domains** - Katalog domen
+
+```sql
+CREATE TABLE domains (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    domain TEXT UNIQUE NOT NULL,     -- Nazwa domeny (np. "youtube.com")
+    category TEXT,                   -- Kategoria: 'religious', 'media', 'social', 'educational', 'unknown'
+    is_religious BOOLEAN DEFAULT 0,  -- Czy domena religijna
+    is_media BOOLEAN DEFAULT 0,      -- Czy domena medialna
+    is_social BOOLEAN DEFAULT 0,     -- Czy domena społecznościowa
+    is_educational BOOLEAN DEFAULT 0,-- Czy domena edukacyjna
+    trust_score REAL DEFAULT 0.5,    -- Wskaźnik wiarygodności (0.0-1.0)
+    first_seen TIMESTAMP,            -- Pierwsze wystąpienie
+    last_seen TIMESTAMP,             -- Ostatnie wystąpienie
+    total_references INTEGER DEFAULT 0, -- Liczba odniesień
+    created_at TIMESTAMP
+);
+```
+
+#### **post_urls** - URL-e z postów
+
+```sql
+CREATE TABLE post_urls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id TEXT,                    -- ID posta
+    url TEXT,                        -- Pełny URL
+    domain_id INTEGER,               -- Odniesienie do tabeli domains
+    url_type TEXT,                   -- Typ: 'article', 'video', 'image', 'social', 'unknown'
+    is_external BOOLEAN DEFAULT 1,   -- Czy link zewnętrzny
+    created_at TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts (id),
+    FOREIGN KEY (domain_id) REFERENCES domains (id)
+);
+```
+
+#### **post_url_stats** - Statystyki URL-ów per post
+
+```sql
+CREATE TABLE post_url_stats (
+    post_id TEXT PRIMARY KEY,
+    total_urls INTEGER DEFAULT 0,       -- Całkowita liczba URL-ów
+    unique_domains INTEGER DEFAULT 0,   -- Liczba unikalnych domen
+    religious_urls INTEGER DEFAULT 0,   -- Liczba linków religijnych
+    media_urls INTEGER DEFAULT 0,       -- Liczba linków medialnych
+    social_urls INTEGER DEFAULT 0,      -- Liczba linków społecznościowych
+    educational_urls INTEGER DEFAULT 0, -- Liczba linków edukacyjnych
+    unknown_urls INTEGER DEFAULT 0,     -- Liczba niekategoryzowanych linków
+    created_at TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts (id)
+);
+```
+
+#### **post_named_entities** - Named Entities (nazwy własne)
+
+```sql
+CREATE TABLE post_named_entities (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id TEXT,                    -- ID posta
+    entity_text TEXT,                -- Tekst encji (np. "Jan Paweł II")
+    entity_label TEXT,               -- Typ: PERSON, ORG, GPE, EVENT, etc.
+    entity_description TEXT,         -- Opis typu encji
+    start_char INTEGER,              -- Pozycja początkowa w tekście
+    end_char INTEGER,                -- Pozycja końcowa w tekście
+    created_at TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts (id)
+);
+```
+
+#### **post_ner_stats** - Statystyki Named Entities per post
+
+```sql
+CREATE TABLE post_ner_stats (
+    post_id TEXT PRIMARY KEY,
+    total_entities INTEGER DEFAULT 0,    -- Całkowita liczba encji
+    person_entities INTEGER DEFAULT 0,   -- Osoby (Jan Paweł II, św. Teresa)
+    org_entities INTEGER DEFAULT 0,      -- Organizacje (Kościół, Watykan)
+    gpe_entities INTEGER DEFAULT 0,      -- Miejsca (Rzym, Polska, Kraków)
+    event_entities INTEGER DEFAULT 0,    -- Wydarzenia (Wielkanoc, Boże Narodzenie)
+    other_entities INTEGER DEFAULT 0,    -- Inne encje
+    created_at TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts (id)
+);
+```
+
 ## 📊 Przykłady analiz SQL
 
 ### Podstawowe statystyki
 
-#### **Przegląd forów**
+#### **Przegląd forów w wspólnej bazie**
 
 ```sql
--- Liczba postów na forum
+-- Porównanie aktywności między forami
 SELECT
-    f.title as forum,
-    COUNT(p.id) as posts_count,
+    f.spider_name as forum,
+    f.title,
+    COUNT(DISTINCT p.id) as posts_count,
     COUNT(DISTINCT p.user_id) as users_count,
+    COUNT(DISTINCT t.id) as threads_count,
     MIN(p.created_at) as first_post,
     MAX(p.created_at) as last_post
 FROM forums f
-JOIN sections s ON f.id = s.forum_id
-JOIN threads t ON s.id = t.section_id
-JOIN posts p ON t.id = p.thread_id
-GROUP BY f.id, f.title;
+LEFT JOIN sections s ON f.id = s.forum_id
+LEFT JOIN threads t ON s.id = t.section_id
+LEFT JOIN posts p ON t.id = p.thread_id
+GROUP BY f.id, f.spider_name, f.title
+ORDER BY posts_count DESC;
 ```
 
 #### **Najaktywniejsze sekcje**
@@ -623,11 +775,46 @@ GROUP BY pos
 ORDER BY count DESC;
 ```
 
+#### **Analiza cech morfologicznych**
+
+```sql
+-- Analiza przypadków rzeczowników (wykorzystanie morphologizer)
+SELECT
+    json_extract(morph_features, '$.Case') as case_form,
+    COUNT(*) as frequency,
+    COUNT(DISTINCT post_id) as posts_count
+FROM post_linguistic_analysis
+WHERE pos = 'NOUN'
+  AND json_extract(morph_features, '$.Case') IS NOT NULL
+GROUP BY json_extract(morph_features, '$.Case')
+ORDER BY frequency DESC;
+```
+
+#### **Analiza rodzaju gramatycznego**
+
+```sql
+-- Rozkład rodzaju gramatycznego w tekstach religijnych
+SELECT
+    f.spider_name as forum,
+    json_extract(pla.morph_features, '$.Gender') as gender,
+    COUNT(*) as frequency
+FROM forums f
+JOIN sections s ON f.id = s.forum_id
+JOIN threads t ON s.id = t.section_id
+JOIN posts p ON t.id = p.thread_id
+JOIN post_linguistic_analysis pla ON p.id = pla.post_id
+WHERE pla.pos IN ('NOUN', 'ADJ')
+  AND json_extract(pla.morph_features, '$.Gender') IS NOT NULL
+GROUP BY f.spider_name, json_extract(pla.morph_features, '$.Gender')
+ORDER BY f.spider_name, frequency DESC;
+```
+
 #### **Analiza sentymentu**
 
 ```sql
 -- Posty z najwyższym sentymentem pozytywnym
 SELECT
+    f.spider_name as forum,
     p.content,
     pls.sentiment_polarity,
     pls.sentiment_subjectivity,
@@ -636,9 +823,32 @@ SELECT
 FROM posts p
 JOIN post_linguistic_stats pls ON p.id = pls.post_id
 JOIN users u ON p.user_id = u.id
+JOIN threads t ON p.thread_id = t.id
+JOIN sections s ON t.section_id = s.id
+JOIN forums f ON s.forum_id = f.id
 WHERE pls.sentiment_polarity > 0.5
 ORDER BY pls.sentiment_polarity DESC
 LIMIT 10;
+```
+
+#### **Porównanie sentymentu między forami**
+
+```sql
+-- Średni sentyment na forum
+SELECT
+    f.spider_name as forum,
+    COUNT(pls.post_id) as analyzed_posts,
+    ROUND(AVG(pls.sentiment_polarity), 3) as avg_sentiment,
+    ROUND(AVG(pls.sentiment_subjectivity), 3) as avg_subjectivity,
+    ROUND(AVG(pls.readability_score), 1) as avg_readability
+FROM forums f
+JOIN sections s ON f.id = s.forum_id
+JOIN threads t ON s.id = t.section_id
+JOIN posts p ON t.id = p.thread_id
+JOIN post_linguistic_stats pls ON p.id = pls.post_id
+GROUP BY f.id, f.spider_name
+HAVING analyzed_posts > 50
+ORDER BY avg_sentiment DESC;
 ```
 
 #### **Statystyki czytelności**
@@ -663,20 +873,199 @@ ORDER BY avg_readability DESC;
 #### **Analiza tematyczna przez słowa kluczowe**
 
 ```sql
--- Posty zawierające słowa religijne
-SELECT DISTINCT
-    p.id,
-    p.content,
-    u.username,
-    s.title as section
+-- Posty zawierające słowa religijne z podziałem na fora
+SELECT
+    f.spider_name as forum,
+    COUNT(DISTINCT p.id) as posts_with_keywords,
+    COUNT(DISTINCT pla.lemma) as unique_religious_words
 FROM posts p
-JOIN users u ON p.user_id = u.id
 JOIN threads t ON p.thread_id = t.id
 JOIN sections s ON t.section_id = s.id
+JOIN forums f ON s.forum_id = f.id
 JOIN post_linguistic_analysis pla ON p.id = pla.post_id
 WHERE pla.lemma IN ('bóg', 'jezus', 'chrystus', 'modlitwa', 'wiara', 'kościół')
   AND pla.is_alpha = 1
+GROUP BY f.id, f.spider_name
+ORDER BY posts_with_keywords DESC;
+```
+
+#### **Analiza słownictwa religijnego między forami**
+
+```sql
+-- Najczęściej używane słowa religijne per forum
+SELECT
+    f.spider_name as forum,
+    pla.lemma,
+    COUNT(*) as frequency,
+    COUNT(DISTINCT p.id) as posts_count
+FROM forums f
+JOIN sections s ON f.id = s.forum_id
+JOIN threads t ON s.id = t.section_id
+JOIN posts p ON t.id = p.thread_id
+JOIN post_linguistic_analysis pla ON p.id = pla.post_id
+WHERE pla.lemma IN ('bóg', 'jezus', 'chrystus', 'modlitwa', 'wiara', 'kościół', 'duch', 'święty')
+  AND pla.is_alpha = 1
+GROUP BY f.spider_name, pla.lemma
+ORDER BY f.spider_name, frequency DESC;
+```
+
+### Analizy domen i URL-ów
+
+#### **Najpopularniejsze domeny**
+
+```sql
+-- Top domeny linkowane w postach
+SELECT
+    d.domain,
+    d.category,
+    d.total_references,
+    COUNT(DISTINCT pu.post_id) as posts_with_domain
+FROM domains d
+JOIN post_urls pu ON d.id = pu.domain_id
+GROUP BY d.id, d.domain, d.category
+ORDER BY d.total_references DESC
 LIMIT 20;
+```
+
+#### **Analiza domen religijnych**
+
+```sql
+-- Domeny religijne per forum
+SELECT
+    f.spider_name as forum,
+    COUNT(DISTINCT d.domain) as religious_domains,
+    SUM(d.total_references) as total_religious_links
+FROM forums f
+JOIN sections s ON f.id = s.forum_id
+JOIN threads t ON s.id = t.section_id
+JOIN posts p ON t.id = p.thread_id
+JOIN post_urls pu ON p.id = pu.post_id
+JOIN domains d ON pu.domain_id = d.id
+WHERE d.is_religious = 1
+GROUP BY f.spider_name
+ORDER BY total_religious_links DESC;
+```
+
+#### **Typy URL-ów per forum**
+
+```sql
+-- Rozkład typów URL-ów
+SELECT
+    f.spider_name as forum,
+    pu.url_type,
+    COUNT(*) as count,
+    COUNT(DISTINCT pu.post_id) as posts_count
+FROM forums f
+JOIN sections s ON f.id = s.forum_id
+JOIN threads t ON s.id = t.section_id
+JOIN posts p ON t.id = p.thread_id
+JOIN post_urls pu ON p.id = pu.post_id
+GROUP BY f.spider_name, pu.url_type
+ORDER BY f.spider_name, count DESC;
+```
+
+#### **Wiarygodność źródeł**
+
+```sql
+-- Średnia wiarygodność linkowanych domen per forum
+SELECT
+    f.spider_name as forum,
+    COUNT(DISTINCT d.domain) as unique_domains,
+    ROUND(AVG(d.trust_score), 3) as avg_trust_score,
+    COUNT(CASE WHEN d.trust_score >= 0.8 THEN 1 END) as high_trust_domains,
+    COUNT(CASE WHEN d.trust_score < 0.6 THEN 1 END) as low_trust_domains
+FROM forums f
+JOIN sections s ON f.id = s.forum_id
+JOIN threads t ON s.id = t.section_id
+JOIN posts p ON t.id = p.thread_id
+JOIN post_urls pu ON p.id = pu.post_id
+JOIN domains d ON pu.domain_id = d.id
+GROUP BY f.spider_name
+ORDER BY avg_trust_score DESC;
+```
+
+### Analizy Named Entities (NER)
+
+#### **Najczęściej wymieniane osoby**
+
+```sql
+-- Top osoby religijne w dyskusjach
+SELECT
+    f.spider_name as forum,
+    pne.entity_text as person,
+    COUNT(*) as mentions,
+    COUNT(DISTINCT pne.post_id) as posts_count
+FROM forums f
+JOIN sections s ON f.id = s.forum_id
+JOIN threads t ON s.id = t.section_id
+JOIN posts p ON t.id = p.thread_id
+JOIN post_named_entities pne ON p.id = pne.post_id
+WHERE pne.entity_label IN ('PERSON', 'PER')
+GROUP BY f.spider_name, pne.entity_text
+HAVING mentions > 5
+ORDER BY f.spider_name, mentions DESC;
+```
+
+#### **Organizacje religijne**
+
+```sql
+-- Najczęściej wymieniane organizacje
+SELECT
+    pne.entity_text as organization,
+    COUNT(*) as mentions,
+    COUNT(DISTINCT f.spider_name) as forums_mentioned
+FROM post_named_entities pne
+JOIN posts p ON pne.post_id = p.id
+JOIN threads t ON p.thread_id = t.id
+JOIN sections s ON t.section_id = s.id
+JOIN forums f ON s.forum_id = f.id
+WHERE pne.entity_label IN ('ORG', 'ORGANIZATION')
+GROUP BY pne.entity_text
+ORDER BY mentions DESC
+LIMIT 15;
+```
+
+#### **Miejsca geograficzne**
+
+```sql
+-- Miejsca religijne w dyskusjach
+SELECT
+    f.spider_name as forum,
+    pne.entity_text as place,
+    COUNT(*) as mentions
+FROM forums f
+JOIN sections s ON f.id = s.forum_id
+JOIN threads t ON s.id = t.section_id
+JOIN posts p ON t.id = p.thread_id
+JOIN post_named_entities pne ON p.id = pne.post_id
+WHERE pne.entity_label IN ('GPE', 'LOC', 'LOCATION')
+  AND (pne.entity_text LIKE '%Watykan%'
+    OR pne.entity_text LIKE '%Rzym%'
+    OR pne.entity_text LIKE '%Kraków%'
+    OR pne.entity_text LIKE '%Częstochowa%')
+GROUP BY f.spider_name, pne.entity_text
+ORDER BY f.spider_name, mentions DESC;
+```
+
+#### **Statystyki NER per forum**
+
+```sql
+-- Porównanie rozpoznawania encji między forami
+SELECT
+    f.spider_name as forum,
+    COUNT(DISTINCT pns.post_id) as posts_with_entities,
+    SUM(pns.total_entities) as total_entities,
+    SUM(pns.person_entities) as persons,
+    SUM(pns.org_entities) as organizations,
+    SUM(pns.gpe_entities) as places,
+    ROUND(AVG(pns.total_entities), 2) as avg_entities_per_post
+FROM forums f
+JOIN sections s ON f.id = s.forum_id
+JOIN threads t ON s.id = t.section_id
+JOIN posts p ON t.id = p.thread_id
+JOIN post_ner_stats pns ON p.id = pns.post_id
+GROUP BY f.spider_name
+ORDER BY total_entities DESC;
 ```
 
 ### Analizy temporalne
@@ -758,7 +1147,7 @@ analysis:
 
     - name: spacy_analyzer
       config:
-        model: pl_core_news_sm
+        model: pl_core_news_lg
         include_sentiment: true
         batch_size: 200
         max_length: 1000000
@@ -819,7 +1208,7 @@ uv run fs-cli scrape \
 
 ```bash
 # Rozwiązanie
-python -m spacy download pl_core_news_sm
+python -m spacy download pl_core_news_lg
 
 # Lub większy model (lepszy, ale wolniejszy)
 python -m spacy download pl_core_news_lg
@@ -839,7 +1228,7 @@ uv pip install tiktoken
 uv run fs-cli scrape --batch-size 25 --analysis spacy_full
 
 # Lub użyj mniejszego modelu
-uv run fs-cli scrape --spacy-model pl_core_news_sm
+uv run fs-cli scrape --spacy-model pl_core_news_lg
 ```
 
 #### **4. Zbyt wolne scrapowanie**
@@ -882,19 +1271,220 @@ uv run fs-cli scrape --dry-run --analysis all
 uv run fs-cli status
 ```
 
-### Monitorowanie wydajności
+## 📊 Monitorowanie podczas scrapowania
 
-#### **Sprawdź wykorzystanie zasobów**
+### **Real-time monitoring (zalecane)**
+
+#### **Terminal 1: Uruchom scrapowanie**
 
 ```bash
-# Podczas scrapowania w drugim terminalu
-top -p $(pgrep -f fs-cli)
+uv run fs-cli scrape \
+  --forum all \
+  --analysis all \
+  --sentiment \
+  --spacy-model pl_core_news_lg \
+  --concurrent 8 \
+  --delay 0.3 \
+  --verbose
 ```
 
-#### **Monitoruj rozmiar baz danych**
+#### **Terminal 2: Monitoruj postęp bazy danych**
 
 ```bash
-watch -n 5 'ls -lh data/databases/*.db'
+# Odświeżaj co 10 sekund
+watch -n 10 'uv run fs-cli status'
+
+# Lub sprawdzaj ręcznie
+while true; do
+  clear
+  echo "=== $(date) ==="
+  uv run fs-cli status
+  sleep 15
+done
+```
+
+#### **Terminal 3: Monitoruj zasoby systemowe**
+
+```bash
+# Monitoruj proces fs-cli
+top -pid $(pgrep -f fs-cli)
+
+# Lub wszystkie procesy Python
+top -o cpu -stats pid,command,cpu,mem,time | grep python
+
+# Monitoruj pamięć
+watch -n 5 'ps aux | grep fs-cli | grep -v grep'
+```
+
+#### **Terminal 4: Monitoruj rozmiar bazy**
+
+```bash
+# Rozmiar bazy danych
+watch -n 30 'ls -lh data/databases/forums_unified.db'
+
+# Szczegółowe info o pliku
+watch -n 30 'stat data/databases/forums_unified.db'
+```
+
+### **Monitoring zaawansowany**
+
+#### **Sprawdź postęp scrapowania**
+
+```bash
+# Liczba itemów w czasie rzeczywistym
+watch -n 5 'sqlite3 data/databases/forums_unified.db "
+SELECT
+  f.spider_name,
+  COUNT(p.id) as posts,
+  COUNT(DISTINCT t.id) as threads,
+  COUNT(DISTINCT u.id) as users
+FROM forums f
+LEFT JOIN sections s ON f.id = s.forum_id
+LEFT JOIN threads t ON s.id = t.section_id
+LEFT JOIN posts p ON t.id = p.thread_id
+LEFT JOIN users u ON p.user_id = u.id
+GROUP BY f.spider_name;"'
+```
+
+#### **Monitoruj wydajność analiz**
+
+```bash
+# Sprawdź postęp analiz
+watch -n 10 'sqlite3 data/databases/forums_unified.db "
+SELECT
+  \"Tokenizacja\" as analiza, COUNT(*) as przeanalizowane FROM post_token_stats
+UNION ALL
+SELECT
+  \"Językowa\" as analiza, COUNT(*) as przeanalizowane FROM post_linguistic_stats
+UNION ALL
+SELECT
+  \"NER\" as analiza, COUNT(*) as przeanalizowane FROM post_ner_stats
+UNION ALL
+SELECT
+  \"URL-e\" as analiza, COUNT(*) as przeanalizowane FROM post_url_stats;"'
+```
+
+#### **Sprawdź błędy i ostrzeżenia**
+
+```bash
+# Monitoruj logi Scrapy (jeśli --verbose)
+tail -f scrapy.log
+
+# Lub sprawdź błędy systemowe
+dmesg | tail -20
+```
+
+### **Wskaźniki wydajności**
+
+#### **Optymalne wartości:**
+
+- **CPU**: 60-80% (dla 8 wątków)
+- **RAM**: 4-8GB (z modelem lg)
+- **Items/min**: 100-500 (zależnie od forum)
+- **Requests/min**: 200-1000 (zależnie od --delay)
+
+#### **Sygnały problemów:**
+
+- **CPU > 95%**: Zmniejsz `--concurrent` lub `--batch-size`
+- **RAM > 12GB**: Zmniejsz `--batch-size` lub użyj modelu sm
+- **Items/min < 50**: Zwiększ `--concurrent` lub zmniejsz `--delay`
+- **Błędy HTTP**: Zwiększ `--delay`
+
+### **Komendy diagnostyczne**
+
+#### **Sprawdź aktywne połączenia**
+
+```bash
+netstat -an | grep :80 | wc -l  # HTTP connections
+netstat -an | grep :443 | wc -l # HTTPS connections
+```
+
+#### **Sprawdź wykorzystanie dysku**
+
+```bash
+df -h .  # Dostępne miejsce
+du -sh data/databases/  # Rozmiar katalogu baz
+```
+
+#### **Sprawdź logi błędów**
+
+```bash
+# Ostatnie błędy
+grep -i error ~/.scrapy/logs/* | tail -10
+
+# Sprawdź czy proces działa
+ps aux | grep fs-cli | grep -v grep
+```
+
+### **Przykład pełnego workflow'u monitorowania**
+
+#### **Przygotowanie (Terminal 1):**
+
+```bash
+# Sprawdź stan przed rozpoczęciem
+uv run fs-cli status
+
+# Uruchom kompleksowe scrapowanie
+uv run fs-cli scrape \
+  --forum all \
+  --analysis all \
+  --sentiment \
+  --spacy-model pl_core_news_lg \
+  --concurrent 8 \
+  --delay 0.3 \
+  --verbose
+```
+
+#### **Monitoring (Terminal 2):**
+
+```bash
+# Skrypt monitorujący - zapisz jako monitor.sh
+#!/bin/bash
+while true; do
+  clear
+  echo "=== FORUMS SCRAPER MONITORING - $(date) ==="
+  echo
+
+  # Status bazy danych
+  echo "📊 STATUS BAZY DANYCH:"
+  uv run fs-cli status
+  echo
+
+  # Zasoby systemowe
+  echo "💻 ZASOBY SYSTEMOWE:"
+  ps aux | grep fs-cli | grep -v grep | head -3
+  echo
+
+  # Rozmiar bazy
+  echo "📁 ROZMIAR BAZY:"
+  ls -lh data/databases/forums_unified.db 2>/dev/null || echo "Baza nie istnieje"
+  echo
+
+  sleep 30
+done
+
+# Uruchom monitoring
+chmod +x monitor.sh && ./monitor.sh
+```
+
+#### **Analiza postępu (Terminal 3):**
+
+```bash
+# Real-time SQL monitoring
+watch -n 15 'echo "POSTĘP SCRAPOWANIA:" && sqlite3 data/databases/forums_unified.db "
+SELECT
+  f.spider_name as Forum,
+  COUNT(DISTINCT s.id) as Sekcje,
+  COUNT(DISTINCT t.id) as Wątki,
+  COUNT(DISTINCT p.id) as Posty,
+  COUNT(DISTINCT u.id) as Użytkownicy
+FROM forums f
+LEFT JOIN sections s ON f.id = s.forum_id
+LEFT JOIN threads t ON s.id = t.section_id
+LEFT JOIN posts p ON t.id = p.thread_id
+LEFT JOIN users u ON p.user_id = u.id
+GROUP BY f.spider_name
+ORDER BY Posty DESC;" 2>/dev/null || echo "Baza nie gotowa"'
 ```
 
 ## 🏗️ Architektura systemu
@@ -905,8 +1495,6 @@ watch -n 5 'ls -lh data/databases/*.db'
 forums_scraper/
 ├── 📄 README.md                    # Kompletna dokumentacja (ten plik)
 ├── ⚙️  pyproject.toml               # Konfiguracja pakietu Python
-├── 📂 examples/                    # Przykłady konfiguracji
-│   └── forums_scraper.yaml
 ├── 📂 data/                        # Bazy danych i wyniki
 │   └── databases/                  # SQLite bazy danych
 ├── 📂 forums_scraper/              # Główny pakiet Python
@@ -1078,9 +1666,9 @@ uv run mypy forums_scraper/
 
 ### Przykłady użycia
 
-- [Jupyter Notebooks](examples/notebooks/) - Analizy przykładowe
-- [SQL Queries](examples/sql/) - Gotowe zapytania
-- [Configuration Files](examples/configs/) - Przykładowe konfiguracje
+- **README.md** (ten plik) - Kompletne przykłady SQL i konfiguracji
+- **CLI** - Automatyczne generowanie konfiguracji: `uv run fs-cli config`
+- **Dokumentacja inline** - Wszystkie przykłady w tym pliku
 
 ### Społeczność
 

@@ -118,13 +118,13 @@ LOG_LEVEL = 'WARNING'  # Zmienione z 'INFO' na 'WARNING'
 LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
 
-# SQLite database settings - każdy spider będzie miał swoją dedykowaną bazę danych
-# Format: data/databases/forum_[nazwa_spidera].db
-# SQLITE_DATABASE_PATH = "data/databases/forums.db"  # Nie używane - każdy spider ma swoją bazę
+# SQLite database settings - jedna wspólna baza danych dla wszystkich forów
+SQLITE_DATABASE_PATH = "data/databases/forums_unified.db"
 
 # Ustawienia forums-scraper
 # Ścieżka do pliku konfiguracyjnego YAML/TOML (opcjonalna)
-FS_CONFIG_PATH = "examples/forums_scraper.yaml"
+# CLI automatycznie generuje konfigurację w data/databases/scraper_config.yaml
+FS_CONFIG_PATH = None
 
 # Wymuś asyncio reactor dla wsparcia async pipeline
 TWISTED_REACTOR = "twisted.internet.asyncioreactor.AsyncioSelectorReactor"

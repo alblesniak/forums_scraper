@@ -46,6 +46,8 @@ class AnalysisType(str, Enum):
     BASIC_TOKENS = "basic_tokens"
     TOKEN_COUNT = "token_count"
     SPACY_FULL = "spacy_full"
+    URL_ANALYSIS = "url_analysis"
+    DOMAIN_STATS = "domain_stats"
     ALL = "all"
 
 
@@ -86,13 +88,16 @@ def create_analysis_config(
     
     if AnalysisType.TOKEN_COUNT in analysis_types or AnalysisType.ALL in analysis_types:
         analyzers.append({
-            "name": "token_counter",
+            "name": "token_count",
             "config": {
                 "encoding": "cl100k_base"
             }
         })
     
-    if AnalysisType.BASIC_TOKENS in analysis_types or AnalysisType.ALL in analysis_types:
+    # BasicTokenizer tylko jeśli nie ma spaCy lub explicitly requested
+    if (AnalysisType.BASIC_TOKENS in analysis_types and 
+        AnalysisType.SPACY_FULL not in analysis_types and 
+        AnalysisType.ALL not in analysis_types):
         analyzers.append({
             "name": "basic_tokenizer",
             "config": {
@@ -110,6 +115,24 @@ def create_analysis_config(
                 "include_sentiment": include_sentiment,
                 "batch_size": batch_size,
                 "max_length": 1000000
+            }
+        })
+    
+    if AnalysisType.URL_ANALYSIS in analysis_types or AnalysisType.ALL in analysis_types:
+        analyzers.append({
+            "name": "url_analyzer",
+            "config": {
+                "include_domain_analysis": True,
+                "include_url_categorization": True,
+                "max_urls_per_post": 50
+            }
+        })
+    
+    if AnalysisType.DOMAIN_STATS in analysis_types or AnalysisType.ALL in analysis_types:
+        analyzers.append({
+            "name": "domain_stats",
+            "config": {
+                "track_popularity": True
             }
         })
     
@@ -159,8 +182,12 @@ def display_analysis_summary(analysis_types: List[AnalysisType]) -> None:
             table.add_row("Podstawowa tokenizacja", "Podział na słowa + statystyki", "Brak")
         elif analysis_type == AnalysisType.SPACY_FULL:
             table.add_row("Pełna analiza spaCy", "Lematyzacja, POS, składnia, sentyment", "spacy + model")
+        elif analysis_type == AnalysisType.URL_ANALYSIS:
+            table.add_row("Analiza URL-ów", "Kategoryzacja domen i linków", "Brak")
+        elif analysis_type == AnalysisType.DOMAIN_STATS:
+            table.add_row("Statystyki domen", "Podstawowe statystyki linków", "Brak")
         elif analysis_type == AnalysisType.ALL:
-            table.add_row("Wszystkie analizy", "Kompletna analiza językowa", "tiktoken + spacy")
+            table.add_row("Wszystkie analizy", "Kompletna analiza + URL-e", "tiktoken + spacy")
     
     console.print(table)
 
@@ -219,7 +246,7 @@ def scrape_forums(
     spacy_model: Annotated[str, typer.Option(
         "--spacy-model",
         help="Model spaCy do analizy językowej"
-    )] = "pl_core_news_sm",
+    )] = "pl_core_news_lg",
     
     include_sentiment: Annotated[bool, typer.Option(
         "--sentiment/--no-sentiment",
@@ -293,11 +320,12 @@ def scrape_forums(
         console.print(f"📝 Utworzono plik konfiguracyjny: [cyan]{config_file}[/cyan]")
     
     # Wyświetl plan działania
+    unified_db_path = output_dir / "forums_unified.db"
     console.print("\n🎯 [bold]Plan działania:[/bold]")
+    console.print(f"📊 [bold]Wspólna baza danych:[/bold] [yellow]{unified_db_path}[/yellow]")
     for i, forum in enumerate(forums, 1):
         spider_name = FORUM_SPIDER_MAP[forum]
-        db_path = output_dir / f"forum_{spider_name}.db"
-        console.print(f"  {i}. [cyan]{forum.value}[/cyan] → [yellow]{db_path}[/yellow]")
+        console.print(f"  {i}. [cyan]{forum.value}[/cyan] (spider: {spider_name})")
     
     if dry_run:
         console.print("\n[yellow]🔍 Tryb dry-run - nie wykonuję scrapowania[/yellow]")
@@ -338,7 +366,7 @@ def scrape_forums(
                 scrapy_args = [
                     "scrapy", "crawl", spider_name,
                     "-s", f"FS_CONFIG_PATH={config_file}",
-                    "-s", f"SQLITE_DATABASE_PATH={output_dir}/forum_{spider_name}.db",
+                    "-s", f"SQLITE_DATABASE_PATH={unified_db_path}",
                     "-s", f"CONCURRENT_REQUESTS={concurrent_requests}",
                     "-s", f"DOWNLOAD_DELAY={download_delay}",
                 ]
@@ -381,15 +409,55 @@ def scrape_forums(
         for forum in failed_forums:
             console.print(f"   • {forum}")
     
-    # Wyświetl informacje o bazach danych
-    console.print(f"\n📊 [bold]Bazy danych zapisane w:[/bold] [cyan]{output_dir}[/cyan]")
-    for forum in forums:
-        if forum.value not in failed_forums:
-            spider_name = FORUM_SPIDER_MAP[forum]
-            db_path = output_dir / f"forum_{spider_name}.db"
-            if db_path.exists():
-                size_mb = db_path.stat().st_size / 1024 / 1024
-                console.print(f"   • [cyan]{db_path.name}[/cyan] ([yellow]{size_mb:.1f} MB[/yellow])")
+    # Wyświetl informacje o bazie danych
+    console.print(f"\n📊 [bold]Wspólna baza danych:[/bold]")
+    if unified_db_path.exists():
+        size_mb = unified_db_path.stat().st_size / 1024 / 1024
+        console.print(f"   📁 [cyan]{unified_db_path.name}[/cyan] ([yellow]{size_mb:.1f} MB[/yellow])")
+        
+        # Pokaż statystyki per forum jeśli baza istnieje
+        try:
+            import sqlite3
+            with sqlite3.connect(unified_db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT f.spider_name, f.title, COUNT(p.id) as posts_count
+                    FROM forums f
+                    LEFT JOIN sections s ON f.id = s.forum_id
+                    LEFT JOIN threads t ON s.id = t.section_id
+                    LEFT JOIN posts p ON t.id = p.thread_id
+                    GROUP BY f.id, f.spider_name, f.title
+                    ORDER BY posts_count DESC
+                """)
+                results = cursor.fetchall()
+                
+                if results:
+                    console.print("\n📈 [bold]Statystyki per forum:[/bold]")
+                    for spider_name, title, posts_count in results:
+                        console.print(f"   • [cyan]{spider_name}[/cyan]: [yellow]{posts_count}[/yellow] postów")
+                
+                # Statystyki domen
+                try:
+                    cursor.execute("""
+                        SELECT category, COUNT(*) as count, SUM(total_references) as total_refs
+                        FROM domains 
+                        GROUP BY category 
+                        ORDER BY total_refs DESC
+                    """)
+                    domain_results = cursor.fetchall()
+                    
+                    if domain_results:
+                        console.print("\n🌐 [bold]Statystyki domen:[/bold]")
+                        for category, count, total_refs in domain_results:
+                            console.print(f"   • [cyan]{category}[/cyan]: [yellow]{count}[/yellow] domen, [green]{total_refs}[/green] odniesień")
+                
+                except Exception:
+                    pass  # Tabele domen mogą nie istnieć
+                
+        except Exception:
+            pass  # Ignoruj błędy SQL
+    else:
+        console.print(f"   📁 [yellow]{unified_db_path}[/yellow] (zostanie utworzona)")
 
 
 @app.command(name="list-spiders")
@@ -432,7 +500,7 @@ def create_config_file(
     spacy_model: Annotated[str, typer.Option(
         "--spacy-model",
         help="Model spaCy"
-    )] = "pl_core_news_sm",
+    )] = "pl_core_news_lg",
     
     include_sentiment: Annotated[bool, typer.Option(
         "--sentiment/--no-sentiment",
@@ -495,54 +563,128 @@ def analyze_offline(
 
 @app.command(name="status")
 def show_status(
-    database_dir: Annotated[Path, typer.Option(
-        "--dir", "-d",
-        help="Katalog z bazami danych"
-    )] = Path("data/databases")
+    database_path: Annotated[Path, typer.Option(
+        "--database", "-d",
+        help="Ścieżka do bazy danych"
+    )] = Path("data/databases/forums_unified.db")
 ):
-    """📊 Pokaż status baz danych i statystyki."""
+    """📊 Pokaż status wspólnej bazy danych i statystyki."""
     
-    console.print("📊 [bold]Status baz danych[/bold]")
+    console.print("📊 [bold]Status wspólnej bazy danych[/bold]")
     
-    if not database_dir.exists():
-        console.print(f"[red]Katalog nie istnieje: {database_dir}[/red]")
+    if not database_path.exists():
+        console.print(f"[yellow]Baza danych nie istnieje: {database_path}[/yellow]")
+        console.print("💡 Uruchom scrapowanie: [cyan]uv run fs-cli scrape[/cyan]")
         return
     
-    db_files = list(database_dir.glob("*.db"))
+    # Podstawowe informacje o pliku
+    size_mb = database_path.stat().st_size / 1024 / 1024
+    mtime = datetime.fromtimestamp(database_path.stat().st_mtime)
     
-    if not db_files:
-        console.print(f"[yellow]Brak baz danych w katalogu: {database_dir}[/yellow]")
-        return
+    console.print(f"📁 [cyan]{database_path.name}[/cyan]")
+    console.print(f"📏 Rozmiar: [yellow]{size_mb:.1f} MB[/yellow]")
+    console.print(f"🕒 Ostatnia modyfikacja: [green]{mtime.strftime('%Y-%m-%d %H:%M:%S')}[/green]")
     
-    table = Table(title="Bazy danych", show_header=True)
-    table.add_column("Plik", style="cyan")
-    table.add_column("Rozmiar", style="yellow")
-    table.add_column("Modyfikacja", style="green")
-    table.add_column("Posty", style="magenta")
-    
-    for db_file in sorted(db_files):
-        size_mb = db_file.stat().st_size / 1024 / 1024
-        mtime = datetime.fromtimestamp(db_file.stat().st_mtime)
-        
-        # Spróbuj policzyć posty
-        post_count = "?"
-        try:
-            import sqlite3
-            with sqlite3.connect(db_file) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM posts")
-                post_count = str(cursor.fetchone()[0])
-        except Exception:
-            pass
-        
-        table.add_row(
-            db_file.name,
-            f"{size_mb:.1f} MB",
-            mtime.strftime("%Y-%m-%d %H:%M"),
-            post_count
-        )
-    
-    console.print(table)
+    # Statystyki z bazy danych
+    try:
+        import sqlite3
+        with sqlite3.connect(database_path) as conn:
+            cursor = conn.cursor()
+            
+            # Statystyki główne
+            cursor.execute("SELECT COUNT(*) FROM forums")
+            forums_count = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM posts")
+            posts_count = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM users")
+            users_count = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM threads")
+            threads_count = cursor.fetchone()[0]
+            
+            # Tabela głównych statystyk
+            main_table = Table(title="📈 Główne statystyki", show_header=True)
+            main_table.add_column("Kategoria", style="cyan")
+            main_table.add_column("Liczba", style="yellow")
+            
+            main_table.add_row("Fora", str(forums_count))
+            main_table.add_row("Posty", str(posts_count))
+            main_table.add_row("Użytkownicy", str(users_count))
+            main_table.add_row("Wątki", str(threads_count))
+            
+            console.print(main_table)
+            
+            # Statystyki per forum
+            cursor.execute("""
+                SELECT f.spider_name, f.title, 
+                       COUNT(DISTINCT p.id) as posts_count,
+                       COUNT(DISTINCT u.id) as users_count,
+                       COUNT(DISTINCT t.id) as threads_count
+                FROM forums f
+                LEFT JOIN sections s ON f.id = s.forum_id
+                LEFT JOIN threads t ON s.id = t.section_id
+                LEFT JOIN posts p ON t.id = p.thread_id
+                LEFT JOIN users u ON p.user_id = u.id
+                GROUP BY f.id, f.spider_name, f.title
+                ORDER BY posts_count DESC
+            """)
+            forum_results = cursor.fetchall()
+            
+            if forum_results:
+                forum_table = Table(title="📊 Statystyki per forum", show_header=True)
+                forum_table.add_column("Forum", style="cyan")
+                forum_table.add_column("Posty", style="yellow")
+                forum_table.add_column("Użytkownicy", style="green")
+                forum_table.add_column("Wątki", style="magenta")
+                
+                for spider_name, title, posts, users, threads in forum_results:
+                    forum_table.add_row(
+                        spider_name or "Nieznane",
+                        str(posts),
+                        str(users),
+                        str(threads)
+                    )
+                
+                console.print(forum_table)
+            
+            # Statystyki analiz (jeśli są)
+            try:
+                cursor.execute("SELECT COUNT(*) FROM post_token_stats")
+                token_stats_count = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT COUNT(*) FROM post_linguistic_stats")
+                linguistic_stats_count = cursor.fetchone()[0]
+                
+                if token_stats_count > 0 or linguistic_stats_count > 0:
+                    analysis_table = Table(title="🔬 Statystyki analiz", show_header=True)
+                    analysis_table.add_column("Typ analizy", style="cyan")
+                    analysis_table.add_column("Przeanalizowane posty", style="yellow")
+                    
+                    if token_stats_count > 0:
+                        analysis_table.add_row("Tokenizacja", str(token_stats_count))
+                    
+                    if linguistic_stats_count > 0:
+                        analysis_table.add_row("Analiza językowa", str(linguistic_stats_count))
+                    
+                    # Sprawdź NER
+                    try:
+                        cursor.execute("SELECT COUNT(*) FROM post_ner_stats")
+                        ner_stats_count = cursor.fetchone()[0]
+                        
+                        if ner_stats_count > 0:
+                            analysis_table.add_row("Named Entities", str(ner_stats_count))
+                    except Exception:
+                        pass
+                    
+                    console.print(analysis_table)
+                    
+            except Exception:
+                pass  # Tabele analiz mogą nie istnieć
+            
+    except Exception as e:
+        console.print(f"[red]Błąd podczas odczytu bazy danych: {e}[/red]")
 
 
 def run():

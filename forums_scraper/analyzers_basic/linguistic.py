@@ -84,7 +84,7 @@ class SpacyAnalyzer(Analyzer):
         if not SPACY_AVAILABLE:
             raise ImportError("spaCy nie jest zainstalowane. Zainstaluj: pip install spacy")
         
-        self.model_name = kwargs.get('model', 'pl_core_news_sm')
+        self.model_name = kwargs.get('model', 'pl_core_news_lg')
         self.nlp = None
         self.include_sentiment = kwargs.get('include_sentiment', False)
         self.batch_size = kwargs.get('batch_size', 100)
@@ -131,8 +131,27 @@ class SpacyAnalyzer(Analyzer):
             tokens_info = []
             simple_tokens = []
             
+            # Named Entity Recognition
+            entities = []
+            for ent in doc.ents:
+                entities.append({
+                    'text': ent.text,
+                    'label': ent.label_,
+                    'start': ent.start_char,
+                    'end': ent.end_char,
+                    'description': spacy.explain(ent.label_) if hasattr(spacy, 'explain') else ent.label_
+                })
+            
             for token in doc:
                 if not token.is_space:  # Pomiń białe znaki
+                    # Wykorzystaj morphologizer jeśli dostępny
+                    morph_features = {}
+                    if hasattr(token, 'morph') and token.morph:
+                        try:
+                            morph_features = dict(token.morph)
+                        except Exception:
+                            morph_features = {}
+                    
                     token_info = TokenInfo(
                         token=token.text,
                         lemma=token.lemma_,
@@ -153,7 +172,8 @@ class SpacyAnalyzer(Analyzer):
                         'is_alpha': token_info.is_alpha,
                         'is_stop': token_info.is_stop,
                         'is_punct': token_info.is_punct,
-                        'sentiment_score': token_info.sentiment_score
+                        'sentiment_score': token_info.sentiment_score,
+                        'morph_features': morph_features  # Dodane cechy morfologiczne
                     })
                     
                     simple_tokens.append(token.text.lower())
@@ -175,17 +195,38 @@ class SpacyAnalyzer(Analyzer):
             
             if self.include_sentiment:
                 try:
-                    # Bardzo podstawowa analiza sentymentu na podstawie słów
-                    positive_words = {'dobry', 'świetny', 'wspaniały', 'piękny', 'radość', 'szczęście'}
-                    negative_words = {'zły', 'okropny', 'straszny', 'smutek', 'ból', 'cierpienie'}
+                    # Rozszerzona analiza sentymentu na podstawie słów religijnych
+                    positive_words = {
+                        'dobry', 'świetny', 'wspaniały', 'piękny', 'radość', 'szczęście',
+                        'błogosławiony', 'miłość', 'pokój', 'nadzieja', 'wiara', 'łaska',
+                        'zbawienie', 'święty', 'boży', 'duchowy', 'modlitwa', 'dziękuję'
+                    }
+                    negative_words = {
+                        'zły', 'okropny', 'straszny', 'smutek', 'ból', 'cierpienie',
+                        'grzech', 'diabeł', 'piekło', 'przekleństwo', 'nienawiść', 'złość',
+                        'rozpacz', 'lęk', 'strach', 'wątpliwość', 'kłamstwo', 'zdrada'
+                    }
+                    
+                    # Słowa religijne neutralne (zwiększają subiektywność)
+                    religious_words = {
+                        'bóg', 'jezus', 'chrystus', 'maryja', 'duch', 'kościół',
+                        'papież', 'ksiądz', 'biskup', 'kardynał', 'msza', 'eucharystia'
+                    }
                     
                     words_lower = [token.lower() for token in simple_tokens]
                     positive_count = sum(1 for word in words_lower if word in positive_words)
                     negative_count = sum(1 for word in words_lower if word in negative_words)
+                    religious_count = sum(1 for word in words_lower if word in religious_words)
                     
                     if positive_count + negative_count > 0:
                         sentiment_polarity = (positive_count - negative_count) / (positive_count + negative_count)
-                        sentiment_subjectivity = (positive_count + negative_count) / len(words_lower)
+                        # Uwzględnij słowa religijne w subiektywności
+                        sentiment_subjectivity = (positive_count + negative_count + religious_count * 0.5) / len(words_lower)
+                        sentiment_subjectivity = min(1.0, sentiment_subjectivity)  # Max 1.0
+                    elif religious_count > 0:
+                        # Jeśli są tylko słowa religijne, neutralny sentyment ale wysoka subiektywność
+                        sentiment_polarity = 0.0
+                        sentiment_subjectivity = min(1.0, religious_count / len(words_lower))
                         
                 except Exception:
                     pass  # Ignoruj błędy analizy sentymentu
@@ -213,7 +254,8 @@ class SpacyAnalyzer(Analyzer):
                     'sentiment_polarity': sentiment_polarity,
                     'sentiment_subjectivity': sentiment_subjectivity,
                     'language_detected': language_detected
-                }
+                },
+                'named_entities': entities
             }
             
         except Exception as e:
@@ -242,41 +284,3 @@ class SpacyAnalyzer(Analyzer):
         return max(0.0, min(100.0, readability))
 
 
-class TokenCountAnalyzer(Analyzer):
-    """Analizator liczący tokeny (kompatybilny z istniejącym systemem)."""
-    
-    def __init__(self, **kwargs):
-        self.encoding = kwargs.get('encoding', 'cl100k_base')
-        try:
-            import tiktoken
-            self.tokenizer = tiktoken.get_encoding(self.encoding)
-            self.tiktoken_available = True
-        except ImportError:
-            self.tiktoken_available = False
-            self.tokenizer = None
-    
-    async def setup(self):
-        """Przygotowanie analizatora."""
-        pass
-    
-    async def close(self):
-        """Zamknięcie analizatora."""
-        pass
-    
-    async def analyze(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Liczenie tokenów."""
-        content = data.get('content', '')
-        if not content:
-            return {'token_count': 0}
-        
-        if self.tiktoken_available and self.tokenizer:
-            try:
-                tokens = self.tokenizer.encode(content)
-                return {'token_count': len(tokens)}
-            except Exception:
-                pass
-        
-        # Fallback - przybliżone liczenie tokenów
-        words = content.split()
-        estimated_tokens = len(words) * 1.3  # Przybliżenie: 1 słowo ≈ 1.3 tokena
-        return {'token_count': int(estimated_tokens)}

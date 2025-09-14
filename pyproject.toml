@@ -33,7 +33,8 @@ all = [
 token_count = "forums_scraper.analyzers_basic.tokenizer:TokenCountAnalyzer"
 basic_tokenizer = "forums_scraper.analyzers_basic.linguistic:BasicTokenizer"
 spacy_analyzer = "forums_scraper.analyzers_basic.linguistic:SpacyAnalyzer"
-token_counter = "forums_scraper.analyzers_basic.linguistic:TokenCountAnalyzer"
+url_analyzer = "forums_scraper.analyzers_basic.url_analyzer:URLAnalyzer"
+domain_stats = "forums_scraper.analyzers_basic.url_analyzer:DomainStatsAnalyzer"
 
 [project.scripts]
 fs-cli = "forums_scraper.fs_cli.main:run"
