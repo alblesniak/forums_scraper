@@ -69,3 +69,4 @@ class ForumPostItem(scrapy.Item):
     created_at = scrapy.Field()
     updated_at = scrapy.Field()
     username = scrapy.Field() # Używane tylko w pipeline do mapowania na user_id
+    quoted_usernames = scrapy.Field()  # Lista cytowanych użytkowników w treści posta

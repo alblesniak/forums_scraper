@@ -6,11 +6,15 @@ kluczami numerycznymi i kluczami obcymi między tabelami.
 import sqlite3
 import json
 import logging
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, Optional
 from datetime import datetime
 
 import scrapy
+from scrapy.crawler import Crawler
+
+from forums_scraper.db.schema import ensure_lpmn_tokens_table
 
 
 class SQLitePipeline:
@@ -24,6 +28,8 @@ class SQLitePipeline:
     def __init__(self) -> None:
         self.connection: Optional[sqlite3.Connection] = None
         self.db_path: Optional[Path] = None
+        self.spider_name: str = "forum"
+        self.forum_prefix: str = "FOR"
         # cache do szybszego mapowania URL-i na ID
         self.forum_url_to_id: Dict[str, int] = {}
         self.forum_name_to_id: Dict[str, int] = {}
@@ -32,7 +38,7 @@ class SQLitePipeline:
         self.user_name_to_id: Dict[str, int] = {}
 
     @classmethod
-    def from_crawler(cls, crawler: scrapy.crawler.Crawler) -> "SQLitePipeline":
+    def from_crawler(cls, crawler: Crawler) -> "SQLitePipeline":
         pipeline = cls()
         pipeline.crawler = crawler
         return pipeline
@@ -42,9 +48,12 @@ class SQLitePipeline:
     def open_spider(self, spider: scrapy.Spider) -> None:
         """Otwiera połączenie SQLite i tworzy tabele, jeśli trzeba."""
         settings = getattr(self.crawler, "settings", {})
-        db_path_str = settings.get("SQLITE_DATABASE_PATH", "data/databases/forums_unified.db")
+        db_path_str = settings.get("SQLITE_DATABASE_PATH", "data/databases/forums_data.db")
         self.db_path = Path(db_path_str)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+        self.spider_name = getattr(spider, "name", "forum") or "forum"
+        self.forum_prefix = self._derive_forum_prefix(spider)
 
         self.connection = sqlite3.connect(str(self.db_path))
         self.connection.execute("PRAGMA foreign_keys = ON;")
@@ -145,6 +154,20 @@ class SQLitePipeline:
                 -- Relacje FK do threads/users są świadomie pominięte,
                 -- żeby nie blokować zapisu postów, gdy brak wątku/użytkownika.
                 UNIQUE (thread_id, post_number)
+            )
+            """
+        )
+
+        # Tabela relacji cytowań między użytkownikami w postach
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS post_quotes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id INTEGER NOT NULL,
+                from_user TEXT,
+                to_user TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (post_id) REFERENCES posts (id) ON DELETE CASCADE
             )
             """
         )
@@ -296,6 +319,9 @@ class SQLitePipeline:
             if mapped is not None:
                 section_id = mapped
 
+        author = self._anonymize_username(item.get("author"))
+        last_post_author = self._anonymize_username(item.get("last_post_author"))
+
         cursor.execute(
             """
             INSERT OR IGNORE INTO threads (
@@ -307,11 +333,11 @@ class SQLitePipeline:
                 section_id,
                 item.get("title"),
                 item.get("url"),
-                item.get("author"),
+                author,
                 item.get("replies"),
                 item.get("views"),
                 item.get("last_post_date"),
-                item.get("last_post_author"),
+                last_post_author,
                 item.get("created_at") or datetime.utcnow().isoformat(),
                 item.get("updated_at") or datetime.utcnow().isoformat(),
             ),
@@ -333,6 +359,8 @@ class SQLitePipeline:
         assert self.connection is not None
         cursor = self.connection.cursor()
 
+        username = self._anonymize_username(item.get("username"))
+
         cursor.execute(
             """
             INSERT OR IGNORE INTO users (
@@ -341,7 +369,7 @@ class SQLitePipeline:
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                item.get("username"),
+                username,
                 item.get("join_date"),
                 item.get("posts_count"),
                 item.get("religion"),
@@ -355,18 +383,30 @@ class SQLitePipeline:
         if cursor.lastrowid:
             user_id = cursor.lastrowid
         else:
-            cursor.execute("SELECT id FROM users WHERE username=?", (item.get("username"),))
+            cursor.execute("SELECT id FROM users WHERE username=?", (username,))
             row = cursor.fetchone()
             user_id = row[0] if row else None
 
         self.connection.commit()
 
-        if item.get("username") and user_id is not None:
-            self.user_name_to_id[str(item.get("username"))] = int(user_id)
+        if username and user_id is not None:
+            self.user_name_to_id[str(username)] = int(user_id)
 
-    def _save_post(self, item: Any) -> None:
+    def _save_post(self, item: Any) -> Optional[int]:
         assert self.connection is not None
         cursor = self.connection.cursor()
+
+        raw_content = item.get("content")
+        if not isinstance(raw_content, str):
+            return None
+        content = raw_content.strip()
+        if not content:
+            logging.getLogger(__name__).debug(
+                "Pominięto pusty post (thread_id=%s, post_number=%s)",
+                item.get("thread_id"),
+                item.get("post_number"),
+            )
+            return None
 
         # thread_id może być ID (jako int lub string)
         thread_id = item.get("thread_id")
@@ -375,7 +415,7 @@ class SQLitePipeline:
 
         # user_id może być ID lub username – spróbuj zmapować
         user_id = item.get("user_id")
-        username = item.get("username")
+        username = self._anonymize_username(item.get("username"))
         if not user_id and username:
             user_id = self.user_name_to_id.get(str(username))
 
@@ -388,15 +428,23 @@ class SQLitePipeline:
         cursor.execute(
             """
             INSERT OR REPLACE INTO posts (
-                thread_id, user_id, post_number, content, content_urls,
+                id, thread_id, user_id, post_number, content, content_urls,
                 post_date, url, username, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (
+                (
+                    SELECT id FROM posts
+                    WHERE thread_id = ? AND post_number = ?
+                ),
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
             """,
             (
                 thread_id,
+                item.get("post_number"),
+                thread_id,
                 user_id,
                 item.get("post_number"),
-                item.get("content"),
+                content,
                 content_urls_str,
                 item.get("post_date"),
                 item.get("url"),
@@ -406,5 +454,56 @@ class SQLitePipeline:
             ),
         )
 
+        post_id = cursor.lastrowid
+        if not post_id:
+            cursor.execute(
+                "SELECT id FROM posts WHERE thread_id = ? AND post_number = ?",
+                (thread_id, item.get("post_number")),
+            )
+            row = cursor.fetchone()
+            post_id = row[0] if row else None
+
+        # Zapis relacji cytowań (from_user -> to_user) w tabeli post_quotes
+        quoted_usernames = item.get("quoted_usernames") or []
+        if post_id and username and isinstance(quoted_usernames, (list, tuple)):
+            # Usuń duplikaty cytowanych użytkowników na poziomie bazy
+            unique_to_users = set()
+            for raw_user in quoted_usernames:
+                anonymized = self._anonymize_username(raw_user)
+                if anonymized:
+                    unique_to_users.add(anonymized)
+            for to_user in unique_to_users:
+                cursor.execute(
+                    """
+                    INSERT INTO post_quotes (post_id, from_user, to_user)
+                    VALUES (?, ?, ?)
+                    """,
+                    (post_id, str(username), to_user),
+                )
+
         self.connection.commit()
+        return int(post_id) if post_id is not None else None
+
+    # --- anonymization helpers ---
+
+    def _derive_forum_prefix(self, spider: scrapy.Spider) -> str:
+        raw_prefix = getattr(spider, "forum_prefix", None)
+        candidate = raw_prefix or getattr(spider, "forum_title", None) or getattr(spider, "name", None) or "FOR"
+        letters = [ch for ch in str(candidate).upper() if ch.isalpha()]
+        while len(letters) < 3:
+            letters.append("X")
+        return "".join(letters[:3])
+
+    def _anonymize_username(self, username: Any) -> Optional[str]:
+        if username is None:
+            return None
+        normalized = str(username).strip()
+        if not normalized:
+            return None
+        prefix = self.forum_prefix or "FOR"
+        salt = self.spider_name or "forum"
+        digest = hashlib.sha256(f"{salt}:{normalized}".encode("utf-8")).hexdigest()[:12].upper()
+        return f"{prefix}_{digest}"
+
+
 

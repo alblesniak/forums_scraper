@@ -75,9 +75,15 @@ def clean_post_content(content):
     # Usuń linki wraz z ich tekstem (link tekst nie jest zachowywany)
     content = re.sub(r'<a[^>]*>.*?</a>', '', content, flags=re.IGNORECASE | re.DOTALL)
     
-    # Usuń adresy URL w tekście (http/https/www)
+    # Usuń adresy URL w tekście (http/https/www + gołe domeny typu "wczasypolskie.pl/xxx")
     content = re.sub(r'https?://[^\s<>"]+', '', content)
     content = re.sub(r'www\.[^\s<>"]+', '', content)
+    # Gołe domeny z opcjonalną ścieżką, niebędące częścią e‑maila
+    content = re.sub(
+        r'(?<!@)\b([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(/[^\s<>"\)\]]*)?',
+        '',
+        content,
+    )
     # Usuń frazy "link z opisem on-line" i podobne
     content = re.sub(r'link z opisem on-line', '', content, flags=re.IGNORECASE)
     
@@ -346,9 +352,14 @@ def clean_dolina_modlitwy_post_content(content):
     # Usuń linki (zachowaj tekst)
     content = re.sub(r'<a[^>]*>(.*?)</a>', r'\1', content)
     
-    # Usuń adresy URL w tekście (http/https/www)
+    # Usuń adresy URL w tekście (http/https/www + gołe domeny)
     content = re.sub(r'https?://[^\s<>"]+', '', content)
     content = re.sub(r'www\.[^\s<>"]+', '', content)
+    content = re.sub(
+        r'(?<!@)\b([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(/[^\s<>"\)\]]*)?',
+        '',
+        content,
+    )
     
     # Zamień tagi <br> na znaki nowej linii
     content = re.sub(r'<br\s*/?>', '\n', content, flags=re.IGNORECASE)
@@ -369,6 +380,65 @@ def clean_dolina_modlitwy_post_content(content):
     content = re.sub(r'\s+\n', '\n', content)  # Usuń spacje na końcu linii
     
     return content.strip() 
+
+
+def extract_quoted_usernames(content_html: str) -> list[str]:
+    """Wyciąga nazwy użytkowników cytowanych w treści posta.
+
+    Obsługiwane wzorce (dopasowane do forów w projekcie):
+
+    - Radio Katolik / Wiara.pl (starsze phpBB):
+      <div class="quotetitle">NazwaUzytkownika napisał(a):</div>
+      Ignoruje nagłówki typu "Cytuj:" bez nazwy użytkownika.
+
+    - Z Chrystusem (nowocześniejsze phpBB):
+      <cite><a ...>NazwaUzytkownika</a> pisze:</cite>
+      lub <cite>NazwaUzytkownika pisze:</cite>
+
+    - Uniwersalne/pozostałości BBCode:
+      <b>NazwaUzytkownika napisał:</b>
+    """
+    if not content_html:
+        return []
+
+    usernames: set[str] = set()
+
+    # --- WZORZEC 1: Radio Katolik i Wiara.pl ---
+    # <div class="quotetitle">User napisał(a):</div>
+    rc_wiara_matches = re.findall(
+        r'class="quotetitle"[^>]*>\s*(.*?)\s+napisał(?:a|\(a\))?:',
+        content_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    for user in rc_wiara_matches:
+        clean_user = re.sub(r"<[^>]+>", "", user).strip()
+        if clean_user and clean_user.lower() != "cytuj" and len(clean_user) < 50:
+            usernames.add(clean_user)
+
+    # --- WZORZEC 2: Z Chrystusem (phpBB cite) ---
+    # <cite>...User... pisze:</cite>
+    zc_matches = re.findall(
+        r"<cite[^>]*>(.*?)\s+pisze:",
+        content_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    for raw in zc_matches:
+        clean_user = re.sub(r"<[^>]+>", "", raw).strip()
+        if clean_user and len(clean_user) < 50:
+            usernames.add(clean_user)
+
+    # --- WZORZEC 3: BBCode / pogrubione nagłówki ---
+    bold_matches = re.findall(
+        r"<b>\s*(.*?)\s+napisał:</b>",
+        content_html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    for user in bold_matches:
+        clean_user = re.sub(r"<[^>]+>", "", user).strip()
+        if clean_user and len(clean_user) < 50:
+            usernames.add(clean_user)
+
+    return list(usernames)
 
 
 def extract_urls_from_html(content: str, base_url: str = None):
@@ -431,7 +501,6 @@ def extract_urls_from_html(content: str, base_url: str = None):
             link = link.strip()
             if not link:
                 continue
-            # Rozwiń względne (dla porządku) i odfiltruj wewnętrzne
             try:
                 parsed_link = urlparse(link)
                 link_host = parsed_link.netloc.lower()
@@ -446,6 +515,41 @@ def extract_urls_from_html(content: str, base_url: str = None):
                     is_prefix_duplicate = True
                     break
             if is_prefix_duplicate:
+                continue
+            if link not in seen:
+                seen.add(link)
+                urls.append(link)
+    except Exception:
+        pass
+
+    # 3) Gołe domeny typu "wczasypolskie.pl/xxx" (bez http/www), ale nie e‑maile
+    try:
+        bare = re.findall(
+            r'(?<!@)\b([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(/[^\s<>"\)\]]*)?',
+            content,
+            flags=re.IGNORECASE,
+        )
+        for host, path in bare:
+            link = f"{host}{path or ''}".strip()
+            if not link:
+                continue
+            # Jeżeli mamy base_url, spróbujmy zbudować pełny URL, aby zachować spójność
+            if base_url:
+                try:
+                    scheme = urlparse(base_url).scheme or "http"
+                    link = f"{scheme}://{link}"
+                except Exception:
+                    pass
+            # Odfiltruj linki wewnętrzne względem base_host (po zbudowaniu pełnego URL)
+            try:
+                parsed_link = urlparse(link)
+                link_host = parsed_link.netloc.lower()
+                if base_host and link_host == base_host:
+                    continue
+            except Exception:
+                pass
+            # Pomiń duplikaty/prefiksy istniejących URL-i
+            if any(existing.startswith(link) or link.startswith(existing) for existing in urls):
                 continue
             if link not in seen:
                 seen.add(link)

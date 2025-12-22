@@ -118,7 +118,22 @@ LOG_FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 LOG_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
 
 # SQLite database settings - jedna wspólna baza danych dla wszystkich forów
-SQLITE_DATABASE_PATH = "data/databases/forums_unified.db"
+SQLITE_DATABASE_PATH = "data/databases/forums_data.db"
+
+# LPMN - analiza językowa postów (domyślnie wyłączona)
+LPMN_ANALYSIS_ENABLED = True
+LPMN_BATCH_SIZE = 100
+LPMN_PIPELINE = [
+    "any2txt",
+    {
+        "wcrft2": {
+            "model": "nkjp+morfeusz-n82"  # domyślny, pełny model
+        }
+    }
+]
+LPMN_CONFIG_PATH = "scripts/lpmn/config.example.yml"
+LPMN_STORAGE_DIR = "data/lpmn_batches"
+LPMN_TASK_TIMEOUT = 1  # sekundy, 0 oznacza brak limitu
 
 # Ustawienia forums-scraper
 # Ścieżka do pliku konfiguracyjnego YAML/TOML (opcjonalna)

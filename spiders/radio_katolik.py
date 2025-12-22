@@ -3,7 +3,14 @@ from urllib.parse import urljoin, urlparse, parse_qs, urlencode, urlunparse
 import re
 
 from ..items import ForumItem, ForumSectionItem, ForumThreadItem, ForumUserItem, ForumPostItem
-from ..utils import clean_post_content, normalize_gender, parse_polish_date, extract_urls_from_html, strip_quotes_from_html
+from ..utils import (
+    clean_post_content,
+    normalize_gender,
+    parse_polish_date,
+    extract_urls_from_html,
+    strip_quotes_from_html,
+    extract_quoted_usernames,
+)
 from ..base_spider import BaseForumSpider
 
 
@@ -325,6 +332,8 @@ class RadioKatolikSpider(BaseForumSpider):
             if content_element:
                 # Wyciągnij HTML zawartości
                 content_html = content_element.get()
+                # Najpierw wyciągnij cytowanych użytkowników z pełnego HTML
+                quoted_usernames = extract_quoted_usernames(content_html)
                 # Usuń cytaty i ekstrahuj URL-e tylko z oryginalnej treści
                 content_html_no_quotes = strip_quotes_from_html(content_html)
                 content_urls = extract_urls_from_html(content_html_no_quotes, base_url=response.url)
@@ -356,6 +365,7 @@ class RadioKatolikSpider(BaseForumSpider):
             post_item['post_number'] = post_number
             post_item['content'] = content
             post_item['content_urls'] = content_urls if 'content_urls' in locals() else []
+            post_item['quoted_usernames'] = quoted_usernames if 'quoted_usernames' in locals() else []
             post_item['post_date'] = post_date
             post_item['url'] = post_url
             

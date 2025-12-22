@@ -4,9 +4,25 @@ import re
 from ..items import ForumItem, ForumSectionItem, ForumThreadItem, ForumUserItem, ForumPostItem
 from ..base_spider import BaseForumSpider
 try:
-    from ..utils import clean_post_content, clean_dolina_modlitwy_post_content, normalize_gender, parse_polish_date, extract_urls_from_html, strip_quotes_from_html
+    from ..utils import (
+        clean_post_content,
+        clean_dolina_modlitwy_post_content,
+        normalize_gender,
+        parse_polish_date,
+        extract_urls_from_html,
+        strip_quotes_from_html,
+        extract_quoted_usernames,
+    )
 except ImportError:
-    from utils import clean_post_content, clean_dolina_modlitwy_post_content, normalize_gender, parse_polish_date, extract_urls_from_html, strip_quotes_from_html
+    from utils import (
+        clean_post_content,
+        clean_dolina_modlitwy_post_content,
+        normalize_gender,
+        parse_polish_date,
+        extract_urls_from_html,
+        strip_quotes_from_html,
+        extract_quoted_usernames,
+    )
 
 
 class DolinaModlitwySpider(BaseForumSpider):
@@ -389,21 +405,14 @@ class DolinaModlitwySpider(BaseForumSpider):
             if content_element:
                 # Wyciągnij HTML zawartości
                 content_html = content_element.get()
-                # 1) Tekst bez cytatów przy użyciu XPath (pomija węzły będące w ancestor::blockquote lub ancestor::div[contains(@class,'quote')])
-                text_nodes = post.xpath('.//div[contains(@class,"postbody")]//div[contains(@class,"content")]//text()[not(ancestor::blockquote) and not(ancestor::div[contains(@class,"quote")])]')
-                text_joined = ' '.join([t.get().strip() for t in text_nodes if t.get().strip()])
-                # 2) Jeśli XPath nic nie zwrócił, wróć do HTML-owego czyszczenia
-                if text_joined:
-                    content = text_joined
-                    content_urls = extract_urls_from_html(content_html, base_url=response.url)
-                else:
-                    from re import IGNORECASE, DOTALL, sub
-                    # Odetnij wiodące cytaty na początku treści (ostrożnie)
-                    leading_quotes_pattern = r'(?is)^(?:\s*(?:<blockquote[^>]*>.*?</blockquote>|<div[^>]+class=\"[^\"]*quote[^\"]*\"[^>]*>.*?</div>))+' 
-                    content_html_after_lead = sub(leading_quotes_pattern, '', content_html)
-                    # Wyczyść i wyciągnij linki
-                    content = clean_dolina_modlitwy_post_content(content_html_after_lead)
-                    content_urls = extract_urls_from_html(content_html_after_lead, base_url=response.url)
+                # Najpierw wyciągnij cytowanych użytkowników z pełnego HTML
+                quoted_usernames = extract_quoted_usernames(content_html)
+                # Usuń cytaty, aby zarówno treść, jak i URL-e pochodziły tylko z oryginalnego posta
+                content_html_no_quotes = strip_quotes_from_html(content_html)
+                # Wyciągnij wszystkie URL-e z treści (w tym gołe domeny)
+                content_urls = extract_urls_from_html(content_html_no_quotes, base_url=response.url)
+                # Wyczyść treść przy użyciu dedykowanej funkcji – usuwa m.in. wszystkie URL-e
+                content = clean_dolina_modlitwy_post_content(content_html_no_quotes)
             
             # Data postu - poprawiona struktura HTML
             post_date = None
@@ -427,6 +436,7 @@ class DolinaModlitwySpider(BaseForumSpider):
             post_item['post_number'] = post_number
             post_item['content'] = content
             post_item['content_urls'] = content_urls if 'content_urls' in locals() else []
+            post_item['quoted_usernames'] = quoted_usernames if 'quoted_usernames' in locals() else []
             post_item['post_date'] = post_date
             post_item['url'] = post_url
             
